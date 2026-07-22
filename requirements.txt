@@ -1,0 +1,7 @@
+# Local/orientation-only deps (reading vLLM source, light scripting).
+# Colab-side deps for the actual export/benchmark pipeline (llmcompressor,
+# bitsandbytes, vLLM itself, etc.) are installed inline in the notebooks'
+# setup cells, same convention as the prior project — not listed here.
+requests
+pyyaml
+tqdm
