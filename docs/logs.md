@@ -83,3 +83,10 @@ vLLM load it by repo id like the EAGLE-3 baseline) vs. Google Drive; user chose
 **Drive only**. Convention documented in context.md: Drive path
 `MyDrive/sgt-qat-draft-checkpoints/qwen3-1.7b-sgt-qat/`, copy-to-local-disk before
 vLLM load (don't read straight off the Drive mount).
+
+First Drive copy attempt silently truncated — only `config.json` and
+`generation_config.json` (tiny files) made it into the Drive folder, `model.safetensors`
+(1.2GB) never landed. Cause: this Google account's Drive was 95% full (14.36/15GB),
+only ~0.64GB free, not enough for the file. Freed space and retried; confirmed
+byte-identical via `du -sh` on both the local and Drive copies (1.2G / 1.2G match).
+Checkpoint backup is now actually durable, not just attempted.

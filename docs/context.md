@@ -101,11 +101,14 @@ Ran on Colab Pro, A100-SXM4-40GB, unchanged recipe (`BATCH_TOKENS=1024`, seed 42
   for the full write-up and caveats.
 - Checkpoint: `checkpoints/qwen3-1.7b-sgt-qat/`, 1184.8 MB, confirmed genuinely
   compressed (vs. ~3.4GB fp16) — the `save_compressed=True` assumption held.
-- Result JSON: `results/export_sgt_qat_checkpoint_seed42_2026-07-22T20-49-26.json`
-  (being added to the repo now — was initially only on the ephemeral Colab VM disk,
-  not Drive; **the checkpoint itself has the same ephemeral-disk risk and needs its
-  own backup plan** — likely Drive or a release asset rather than a raw git push, given
-  its size vs. GitHub's 100MB-per-file limit; not yet resolved which).
+- Result JSON: `results/export_sgt_qat_checkpoint_seed42_2026-07-22T20-49-26.json`,
+  pushed to git via a `GITHUB_TOKEN` Colab secret (see "Checkpoint storage" below).
+- **Checkpoint backup confirmed (2026-07-23)**: copied to
+  `MyDrive/sgt-qat-draft-checkpoints/qwen3-1.7b-sgt-qat/` and verified byte-identical
+  via `du -sh` on both sides (1.2G / 1.2G). First copy attempt silently truncated
+  (Drive was 95% full, ~0.64GB free — not enough for the 1.2GB file); freed space and
+  retried successfully. The checkpoint is durable now — no longer only on the
+  ephemeral Colab VM disk.
 - Fixed along the way: `.gitignore` originally excluded `results/*.json` and all of
   `checkpoints/` — the results exclusion was a mistake (now fixed, results/ is
   tracked); checkpoints/ staying gitignored is intentional (too large / needs a real
