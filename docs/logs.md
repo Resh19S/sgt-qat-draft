@@ -31,3 +31,18 @@ guesswork on the drafter interface or config wiring. Wall-clock and memory metri
 aren't covered by this example, so those still need custom instrumentation in our
 harness. Full `propose()` internals still unread but no longer blocking — the example
 shows the config-level API is all we need, not proposer internals.
+
+## 2026-07-23
+
+First real run attempt of notebook 01 (Colab, L4, 22GB VRAM). Stage 1 (GPTQ) and the
+start of Stage 2 (QAT) ran fine — "Trainable parameters (still-W3 layers only): 1193.3M"
+printed correctly — but hit `CUDA out of memory` on the very first `backward()` call.
+20.33/22.03 GiB already allocated going into it. Likely two compounding causes: (1)
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` only works if set before torch/CUDA
+initializes in-process — if cells get re-run out of order after a mid-session edit
+(which is what happened here, after adding the git-clone bootstrap cell), it silently
+doesn't apply; a full Runtime restart + top-to-bottom re-run is the fix. (2)
+`BATCH_TOKENS=1024` in fp32 with ~1.2B trainable params is just heavy for a single
+22GB card — lowered the notebook's default to 256 and added an explicit
+`gc.collect()`/`empty_cache()` right before Stage 2 starts to clear Stage-1
+fragmentation. Not yet confirmed this actually fixes it — next attempt should confirm.
