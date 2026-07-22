@@ -22,5 +22,12 @@ the EAGLE-specific code. Confirmed via `vllm/config/speculative.py` that
 EAGLE/ngram name — so plugging in the SGT-QAT checkpoint should mostly be a config
 problem, not a new-code problem. Also spotted `qwen3_eagle3.py` — an EAGLE-3 head
 already implemented specifically for Qwen3, good reference for the baseline notebook.
-Full `propose()` internals and the exact end-to-end `speculative_config` invocation
-still need a closer read before writing notebook code (see context.md).
+Found `examples/features/speculative_decoding/spec_decode_offline.py` in the vllm
+checkout — a working example covering exactly both methods we need (`eagle3` and
+`draft_model`), with the exact `speculative_config` dict shape for each, plus vLLM's
+built-in acceptance-rate metrics (`vllm:spec_decode_num_drafts` etc. via
+`llm.get_metrics()`). This effectively finishes Phase 1 orientation — no more
+guesswork on the drafter interface or config wiring. Wall-clock and memory metrics
+aren't covered by this example, so those still need custom instrumentation in our
+harness. Full `propose()` internals still unread but no longer blocking — the example
+shows the config-level API is all we need, not proposer internals.

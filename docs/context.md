@@ -48,14 +48,65 @@ end-to-end) still to do interactively with the user.
   for our single-GPU Colab setup (likely irrelevant, TP=1 both sides), and the full
   `propose()` body (500+ lines) — worth a closer read together before writing notebook 03.
 
-## Next step
+### Phase 1 orientation — completed via `examples/features/speculative_decoding/spec_decode_offline.py`
 
-Read `propose()` in `llm_base_proposer.py` and `qwen3_eagle3.py` together with the user
-to fully understand the EAGLE-3 reference implementation's shape (for the baseline,
-notebook 02) before writing any notebook code. Then confirm the exact
-`speculative_config` dict shape needed to invoke `DraftModelProposer` end-to-end (check
-`vllm/engine`/`LLM(...)` entrypoint docs or examples under
-`vendor/vllm/examples/features/speculative_decoding/`).
+This example script effectively closes out Phase 1: it's a working, runnable harness
+that covers both methods we need, plus native acceptance-rate metrics.
+
+- **`speculative_config` shape confirmed for both paths**:
+  - EAGLE-3 baseline: `{"method": "eagle3", "model": <eagle3_head_repo_or_path>,
+    "num_speculative_tokens": N, "disable_padded_drafter_batch": ..., "parallel_drafting": ...}`
+  - Our SGT-QAT drafter: `{"method": "draft_model", "model": <path to
+    checkpoints/qwen3-1.7b-sgt-qat>, "num_speculative_tokens": N, "enforce_eager": ...,
+    "max_model_len": ..., "parallel_drafting": ..., "use_heterogeneous_vocab": ...}`
+    (heterogeneous vocab shouldn't be needed — our drafter is a Qwen3 model sharing the
+    target's tokenizer/vocab.)
+  - Both get passed straight into `LLM(model=<target>, speculative_config=..., ...)`.
+- **Acceptance-rate metrics are built into vLLM**, no custom instrumentation needed:
+  `llm.get_metrics()` exposes `vllm:spec_decode_num_drafts`,
+  `vllm:spec_decode_num_draft_tokens`, `vllm:spec_decode_num_accepted_tokens`, and
+  `vllm:spec_decode_num_accepted_tokens_per_pos` (a `Vector`, gives acceptance rate at
+  each speculative position). Mean acceptance length = `1 + num_accepted/num_drafts`.
+- **Not covered by this example — still need to add ourselves in the harness**:
+  wall-clock speedup (needs explicit timing around `llm.generate()`, comparing against
+  a `speculative_config=None` run) and memory footprint (needs
+  `torch.cuda.max_memory_allocated()`/`nvidia-smi`-style measurement, plus the
+  open question in CLAUDE.md about whether the SGT-QAT checkpoint should be a real
+  compressed export for a fair memory comparison against EAGLE-3's small head).
+- There's also a built-in `--test` mode with known-good expected acceptance lengths for
+  Llama-3.1-8B EAGLE/EAGLE-3 (2.296 / 2.811) as a sanity check pattern — useful precedent
+  for how to structure our own "does this number look sane" checks once we're on Qwen3.
+
+## Decisions (2026-07-23)
+
+- **Checkpoint export**: real compressed export, not a plain `save_pretrained()`. The
+  SGT-QAT checkpoint must be actually re-quantized/packed (llmcompressor
+  compressed-tensors save, `save_compressed=True`) so VRAM/disk size reflects genuine
+  W3/W4 savings — needed for the memory-footprint comparison to mean anything against
+  EAGLE-3's small head. This is more work than a plain save but was chosen deliberately
+  over the cheaper option.
+- **EAGLE-3 baseline checkpoint**: `Tengyunw/qwen3_8b_eagle3` (HF Hub) — a published
+  EAGLE-3 head for Qwen3-8B, compatible with `vllm/model_executor/models/qwen3_eagle3.py`.
+
+## Next step (Phase 2, in progress)
+
+1. `notebooks/01_export_sgt_qat_checkpoint.ipynb` — written (adapts notebook 15's
+   Stage1 GPTQ + Stage2 targeted-QAT recipe, seed=42, PROTECT_FRAC=0.15, ends in a
+   compressed `save_pretrained(..., save_compressed=True)`). Not yet run — needs a GPU
+   Colab session to execute and validate.
+2. `notebooks/common/bench_utils.py` — written: shared harness used by both baseline
+   and SGT-QAT benchmark notebooks (build `LLM`, run generation with timing +
+   `torch.cuda.max_memory_allocated()`, pull acceptance metrics via `llm.get_metrics()`,
+   save a structured JSON to `results/`).
+3. `notebooks/02_baseline_eagle3.ipynb` — written: runs three conditions (no-spec,
+   EAGLE-3 via `Tengyunw/qwen3_8b_eagle3`) via `bench_utils`, against Qwen3-8B. Not yet
+   run.
+4. Still to do: `notebooks/03_sgt_qat_drafter_bench.ipynb` (same harness,
+   `method="draft_model"` pointed at the exported checkpoint) — write once notebook 01
+   has actually been run and produced a real checkpoint to point at, so paths/configs
+   can be confirmed rather than assumed.
+5. Everything above needs an actual GPU (Colab Pro) run to validate — nothing has been
+   executed yet, only authored against the vLLM API confirmed in Phase 1.
 
 ## Open questions / decisions pending
 
