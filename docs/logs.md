@@ -68,3 +68,18 @@ since result JSONs are meant to be tracked (only `checkpoints/` should stay untr
 for size reasons). Fixed. Reverted the notebook's `BATCH_TOKENS` default back to 1024
 (from the 256 OOM workaround) since 1024 is what actually produced this validated
 checkpoint on the A100 — 256 is now just a documented fallback for smaller GPUs.
+
+Tried to `git push` the checkpoint from Colab — hit two blockers in sequence: (1)
+`checkpoints/` is `.gitignore`'d (intentional, hadn't been resolved yet at that
+point), (2) even after that, `git push` failed with `fatal: could not read Username
+for 'https://github.com'` — no credentials configured for a non-interactive HTTPS
+push. Fixed the auth problem with a `GITHUB_TOKEN` Colab secret (same pattern the
+prior project's notebook 15 used for its own repo clone), wired into the remote URL
+for that session only. That got the *results JSON* pushed fine. For the checkpoint
+itself: `model.safetensors` turned out to be 1.2GB as a single file — over GitHub's
+100MB-per-file limit and over GitHub's free LFS quota (1GB total), so git was never
+going to work for it regardless of auth. Considered HF Hub (private repo, would let
+vLLM load it by repo id like the EAGLE-3 baseline) vs. Google Drive; user chose
+**Drive only**. Convention documented in context.md: Drive path
+`MyDrive/sgt-qat-draft-checkpoints/qwen3-1.7b-sgt-qat/`, copy-to-local-disk before
+vLLM load (don't read straight off the Drive mount).

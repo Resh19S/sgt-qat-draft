@@ -118,23 +118,49 @@ Ran on Colab Pro, A100-SXM4-40GB, unchanged recipe (`BATCH_TOKENS=1024`, seed 42
   validated checkpoint on the A100 run — the 256 OOM fix is now just a comment for
   smaller-GPU users, not the default.
 
+## Checkpoint storage — decided: Google Drive (2026-07-23)
+
+`checkpoints/qwen3-1.7b-sgt-qat/model.safetensors` is 1.2GB as a single file —
+over GitHub's 100MB-per-file hard limit, and over GitHub's free Git LFS quota (1GB
+total) too, so neither plain git nor LFS work here. HF Hub (private repo) was
+considered — it would've let vLLM load the drafter by repo id, same pattern as the
+EAGLE-3 baseline — but the user chose **Google Drive only** instead.
+
+**Convention**: checkpoint lives at
+`My Drive/sgt-qat-draft-checkpoints/qwen3-1.7b-sgt-qat/` in the project owner's Drive.
+Each Colab session that needs it (export notebook re-runs, or notebook 03's
+benchmark) should:
+1. Mount Drive (`from google.colab import drive; drive.mount('/content/drive')`).
+2. Copy it to local disk before loading into vLLM — don't point `speculative_config`
+   directly at a Drive-mounted path; Drive I/O can be flaky mid-large-file-read, and
+   the copy only costs a few seconds since model loading happens once at `LLM(...)`
+   init, not per-token:
+   ```python
+   !cp -r /content/drive/MyDrive/sgt-qat-draft-checkpoints/qwen3-1.7b-sgt-qat checkpoints/
+   ```
+3. Then `speculative_config={"method": "draft_model", "model": "checkpoints/qwen3-1.7b-sgt-qat", ...}`
+   as normal.
+
+git push of the checkpoint was attempted and correctly blocked twice: once by
+`.gitignore` (intentional), once by missing GitHub auth in the Colab session (fixed
+separately via a `GITHUB_TOKEN` Colab secret for pushing the *results* JSON, which
+did successfully go through git — only the checkpoint binary itself goes via Drive).
+
 ## Next step (Phase 2, in progress)
 
-1. Get the checkpoint backed up somewhere durable (Drive, or check per-file shard
-   sizes and decide git/LFS vs. Drive-only) — do this before anything else touches it.
+1. Confirm the Drive backup actually happened (`!cp -r checkpoints/... /content/drive/...`)
+   before this Colab session/runtime is closed.
 2. Run `notebooks/02_baseline_eagle3.ipynb` (no-spec + EAGLE-3 via
    `Tengyunw/qwen3_8b_eagle3`, against Qwen3-8B) — not yet run. Needs vLLM
    installed in the Colab session (see the notebook's setup-cell TODO: pin to
    `vendor/vllm`'s commit vs. plain `pip install vllm` — still undecided) and enough
    VRAM for an 8B target (A100 territory, same as notebook 01).
-3. Only then write `notebooks/03_sgt_qat_drafter_bench.ipynb` (same harness,
-   `method="draft_model"` pointed at `checkpoints/qwen3-1.7b-sgt-qat/`) — now unblocked
-   since a real checkpoint exists to point at.
+3. Write `notebooks/03_sgt_qat_drafter_bench.ipynb` (same harness,
+   `method="draft_model"`) — should include the Drive-mount-then-copy step above as
+   its first cell, mirroring notebook 01's git-clone bootstrap cell.
 
 ## Open questions / decisions pending
 
-- How to durably store the 1184.8MB checkpoint (git/LFS vs. Drive vs. HF Hub private
-  repo) — not yet decided, see above.
 - Whether the 68.0% recovery result replicates on a second run/seed, or was specific
   to this A100 run — flagged in findings.md, not yet re-checked.
 - Exact vLLM version/commit to pin for reproducibility — not yet decided.
