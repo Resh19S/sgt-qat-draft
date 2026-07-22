@@ -1,7 +1,5 @@
 vendor/
 checkpoints/
-results/*.json
-results/*.csv
 .venv/
 __pycache__/
 *.pyc

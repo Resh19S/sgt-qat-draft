@@ -46,3 +46,25 @@ doesn't apply; a full Runtime restart + top-to-bottom re-run is the fix. (2)
 22GB card — lowered the notebook's default to 256 and added an explicit
 `gc.collect()`/`empty_cache()` right before Stage 2 starts to clear Stage-1
 fragmentation. Not yet confirmed this actually fixes it — next attempt should confirm.
+
+Second run attempt: switched to an A100-SXM4-40GB Colab instance instead, and ran the
+notebook **as originally pulled** (before the 256/OOM-fix commit landed locally) — so
+still `BATCH_TOKENS=1024`, matching the prior project's original recipe exactly. Worked
+end to end. Real numbers: Stage 1 PPL 22.37, combined PPL 15.91, checkpoint 1184.8MB
+compressed. See `docs/findings.md` for the full write-up — corrected recovery (68.0%)
+came out higher than the prior project's own two runs of the same recipe (63.4%/65.8%),
+flagged as unreplicated rather than trusted yet.
+
+Nearly lost the output: the "Saved: results/..." print made it look like the file was
+somewhere findable, but it actually only exists on the Colab VM's ephemeral local disk
+(`/content/sgt-qat-draft/results/`), not Google Drive — user was looking in the *prior*
+project's Drive `results/` folder, a completely different (and irrelevant) location.
+Same ephemeral risk applies to the exported checkpoint itself, which is the more
+valuable artifact. Backup (git push or Drive copy) still needs to happen before the
+Colab runtime disconnects/recycles.
+
+Also caught: `.gitignore` had `results/*.json` excluded from the start — a mistake,
+since result JSONs are meant to be tracked (only `checkpoints/` should stay untracked,
+for size reasons). Fixed. Reverted the notebook's `BATCH_TOKENS` default back to 1024
+(from the 256 OOM workaround) since 1024 is what actually produced this validated
+checkpoint on the A100 — 256 is now just a documented fallback for smaller GPUs.

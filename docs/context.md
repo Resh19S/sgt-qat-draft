@@ -5,9 +5,9 @@ real progress, so a cold session can pick up without re-deriving anything.
 
 ## Current phase
 
-Phase 1 — orientation in vLLM's spec-decode / drafter code. Initial orientation pass
-done (see below); deeper reading (propose() internals, qwen3_eagle3.py, config wiring
-end-to-end) still to do interactively with the user.
+Phase 2 — baseline reproduction + checkpoint export. Notebook 01 (checkpoint export)
+has been run successfully and produced a real, validated checkpoint. Notebook 02
+(EAGLE-3 baseline) is written but not yet run.
 
 ## State as of 2026-07-22
 
@@ -88,29 +88,53 @@ that covers both methods we need, plus native acceptance-rate metrics.
 - **EAGLE-3 baseline checkpoint**: `Tengyunw/qwen3_8b_eagle3` (HF Hub) — a published
   EAGLE-3 head for Qwen3-8B, compatible with `vllm/model_executor/models/qwen3_eagle3.py`.
 
+## Notebook 01 — RUN, checkpoint exists (2026-07-22)
+
+Ran on Colab Pro, A100-SXM4-40GB, unchanged recipe (`BATCH_TOKENS=1024`, seed 42,
+`PROTECT_FRAC=0.15` target → 0.1562 actual, 53/196 layers protected at W4).
+
+- Stage 1 PPL: 22.37. Stage 1+2 (final) PPL: **15.91**.
+- Corrected recovery vs. prior project's method: **68.0%** — higher than the prior
+  project's own two runs of the identical recipe (63.4%/65.8%). Same recipe/seed,
+  different hardware (A100 here) — worth a second run before trusting this as a real
+  improvement rather than a hardware/kernel-numerics artifact. See `docs/findings.md`
+  for the full write-up and caveats.
+- Checkpoint: `checkpoints/qwen3-1.7b-sgt-qat/`, 1184.8 MB, confirmed genuinely
+  compressed (vs. ~3.4GB fp16) — the `save_compressed=True` assumption held.
+- Result JSON: `results/export_sgt_qat_checkpoint_seed42_2026-07-22T20-49-26.json`
+  (being added to the repo now — was initially only on the ephemeral Colab VM disk,
+  not Drive; **the checkpoint itself has the same ephemeral-disk risk and needs its
+  own backup plan** — likely Drive or a release asset rather than a raw git push, given
+  its size vs. GitHub's 100MB-per-file limit; not yet resolved which).
+- Fixed along the way: `.gitignore` originally excluded `results/*.json` and all of
+  `checkpoints/` — the results exclusion was a mistake (now fixed, results/ is
+  tracked); checkpoints/ staying gitignored is intentional (too large / needs a real
+  storage decision, see above).
+- Also fixed: notebook 01's Colab bootstrap cell needs `!git clone ...` (bare `git
+  clone` in a Colab code cell is a Python `SyntaxError` — cells are Python by default,
+  shell commands need the `!` prefix). `BATCH_TOKENS` in the committed notebook was
+  briefly lowered to 256 as an OOM workaround for smaller GPUs (L4/T4, ~22GB) but
+  reverted back to 1024 as the default since that's what actually produced this
+  validated checkpoint on the A100 run — the 256 OOM fix is now just a comment for
+  smaller-GPU users, not the default.
+
 ## Next step (Phase 2, in progress)
 
-1. `notebooks/01_export_sgt_qat_checkpoint.ipynb` — written (adapts notebook 15's
-   Stage1 GPTQ + Stage2 targeted-QAT recipe, seed=42, PROTECT_FRAC=0.15, ends in a
-   compressed `save_pretrained(..., save_compressed=True)`). Not yet run — needs a GPU
-   Colab session to execute and validate.
-2. `notebooks/common/bench_utils.py` — written: shared harness used by both baseline
-   and SGT-QAT benchmark notebooks (build `LLM`, run generation with timing +
-   `torch.cuda.max_memory_allocated()`, pull acceptance metrics via `llm.get_metrics()`,
-   save a structured JSON to `results/`).
-3. `notebooks/02_baseline_eagle3.ipynb` — written: runs three conditions (no-spec,
-   EAGLE-3 via `Tengyunw/qwen3_8b_eagle3`) via `bench_utils`, against Qwen3-8B. Not yet
-   run.
-4. Still to do: `notebooks/03_sgt_qat_drafter_bench.ipynb` (same harness,
-   `method="draft_model"` pointed at the exported checkpoint) — write once notebook 01
-   has actually been run and produced a real checkpoint to point at, so paths/configs
-   can be confirmed rather than assumed.
-5. Everything above needs an actual GPU (Colab Pro) run to validate — nothing has been
-   executed yet, only authored against the vLLM API confirmed in Phase 1.
+1. Get the checkpoint backed up somewhere durable (Drive, or check per-file shard
+   sizes and decide git/LFS vs. Drive-only) — do this before anything else touches it.
+2. Run `notebooks/02_baseline_eagle3.ipynb` (no-spec + EAGLE-3 via
+   `Tengyunw/qwen3_8b_eagle3`, against Qwen3-8B) — not yet run. Needs vLLM
+   installed in the Colab session (see the notebook's setup-cell TODO: pin to
+   `vendor/vllm`'s commit vs. plain `pip install vllm` — still undecided) and enough
+   VRAM for an 8B target (A100 territory, same as notebook 01).
+3. Only then write `notebooks/03_sgt_qat_drafter_bench.ipynb` (same harness,
+   `method="draft_model"` pointed at `checkpoints/qwen3-1.7b-sgt-qat/`) — now unblocked
+   since a real checkpoint exists to point at.
 
 ## Open questions / decisions pending
 
-- Whether the exported SGT-QAT checkpoint needs a real compressed/bit-packed save
-  (vs. plain fp32/bf16 `save_pretrained()`) for the memory-footprint comparison to be
-  meaningful. Not resolved — see CLAUDE.md.
+- How to durably store the 1184.8MB checkpoint (git/LFS vs. Drive vs. HF Hub private
+  repo) — not yet decided, see above.
+- Whether the 68.0% recovery result replicates on a second run/seed, or was specific
+  to this A100 run — flagged in findings.md, not yet re-checked.
 - Exact vLLM version/commit to pin for reproducibility — not yet decided.
