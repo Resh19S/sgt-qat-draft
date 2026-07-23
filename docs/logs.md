@@ -150,4 +150,47 @@ numbers: **1.79x speedup** (76.29 → 136.76 tok/s), mean acceptance length 2.02
 memory delta +1.30GiB. Ran the full 80 prompts despite the low compute-balance
 warning (Colab flagged ~1 hour remaining at the time) — took about 4.5 + 2.5 minutes
 for the two conditions, fit within budget. See `docs/findings.md` for the full
-write-up. User is now buying more compute before proceeding to notebook 03.
+write-up. User bought more compute and proceeded to notebook 03.
+
+Notebook 03's first real attempt (`method="draft_model"` loading
+`checkpoints/qwen3-1.7b-sgt-qat/`) hit `ImportError: libcudart.so.13` again (same
+CUDA mismatch as notebook 02, but on a *fresh* Colab session/VM — the earlier
+symlink fix was a runtime-level change, never saved anywhere, so it didn't carry
+over). Baked the fix permanently into both notebooks' setup cells this time
+(auto-detects and symlinks the cu13 lib before anything imports torch/vllm) so this
+shouldn't recur.
+
+After that fix, hit a real, unresolved failure: `RuntimeError: Engine core
+initialization failed. See root cause above. Failed core proc(s): {}` — vLLM's
+spawned worker subprocess crashed, but the actual underlying traceback never made
+it into the visible Colab cell output (a known rough edge with vLLM's multiprocess
+V1 engine in notebooks). Investigated via source reading in `vendor/vllm` (free,
+no compute cost) rather than blind retries:
+
+- Confirmed via `checkpoints/qwen3-1.7b-sgt-qat/config.json` that the checkpoint
+  really does carry a `quantization_config` block (`quant_method:
+  compressed-tensors`, `format: pack-quantized`, mixed W3/W4 groups) — the
+  compressed export from notebook 01 worked as intended.
+- Initial hypothesis: `DraftModelProposer._create_draft_vllm_config()` sets
+  `quant_config=None`, which looked like it might strip quantization awareness for
+  the draft model entirely. **Traced this further and it's wrong** —
+  `vllm/config/utils.py`'s `replace()` fully reconstructs the dataclass (calls
+  `cls(**dict)`), which re-triggers `VllmConfig.__post_init__`, which re-derives
+  `quant_config` fresh from `model_config` (the draft's own config, i.e. our
+  checkpoint) whenever it's `None`. So quantization *should* still be correctly
+  detected for the draft model — this is not the bug.
+- Checked whether vLLM's compressed-tensors WNA16 scheme supports 3-bit weights
+  (our checkpoint mixes num_bits=3 and num_bits=4 groups): `WNA16_SUPPORTED_TYPES_MAP`
+  in `compressed_tensors_wNa16.py` does include `3: scalar_types.uint3b4` — so
+  3-bit isn't nominally unsupported either, though didn't fully trace the kernel
+  dispatch logic (`get_scheme`/`_get_scheme_from_parts`) far enough to rule out a
+  narrower kernel-level restriction.
+
+Neither hypothesis panned out cleanly from source reading alone — need the actual
+subprocess traceback to make further progress rather than continuing to guess.
+Found `VLLM_ENABLE_V1_MULTIPROCESSING=0` (in `vllm/envs.py`) as a way to force the
+engine in-process so a crash would surface directly instead of being swallowed by
+the subprocess boundary. **Not yet tried** — user ran out of Colab compute before
+the drafter cell even started executing (0.43 units wasn't enough headroom).
+Paused here; resume with the `VLLM_ENABLE_V1_MULTIPROCESSING=0` env var set before
+re-attempting, once compute is available again.

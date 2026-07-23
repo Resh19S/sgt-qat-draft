@@ -5,10 +5,53 @@ real progress, so a cold session can pick up without re-deriving anything.
 
 ## Current phase
 
-Phase 2 — baseline reproduction + checkpoint export. Notebook 01 (checkpoint export)
-and notebook 02 (EAGLE-3 baseline) have both run successfully with real, trustworthy
-numbers. Notebook 03 (SGT-QAT drafter) is written, not yet run — blocked only on the
-user buying more Colab compute (ran out mid-session).
+Phase 2/3 boundary. Notebook 01 (checkpoint export) and notebook 02 (EAGLE-3
+baseline) have both run successfully with real, trustworthy numbers. Notebook 03
+(SGT-QAT drafter) is written but **blocked on an unresolved vLLM loading failure**
+(see below) — not just waiting on compute anymore, there's a real technical
+question to answer first.
+
+## BLOCKED: notebook 03 draft_model loading (2026-07-24)
+
+First real attempt at loading `checkpoints/qwen3-1.7b-sgt-qat/` via
+`method="draft_model"` crashed with `RuntimeError: Engine core initialization
+failed. See root cause above. Failed core proc(s): {}` — the actual underlying
+exception from vLLM's spawned worker subprocess never appeared in the Colab cell
+output (known rough edge with vLLM's multiprocess V1 engine in notebooks).
+
+**Ruled out via source reading in `vendor/vllm` (free, no compute cost)**:
+- NOT `DraftModelProposer` stripping quantization awareness. Initial hypothesis
+  was that `_create_draft_vllm_config()` setting `quant_config=None` disables
+  quantization for the draft model. Traced further: `vllm/config/utils.py`'s
+  `replace()` fully reconstructs the dataclass (`cls(**dict)`), which re-triggers
+  `VllmConfig.__post_init__`, which re-derives `quant_config` fresh from
+  `model_config` (the draft's own config/checkpoint) whenever it's `None`. So the
+  draft model's own `quantization_config` (confirmed present in
+  `checkpoints/qwen3-1.7b-sgt-qat/config.json` — `quant_method: compressed-tensors`,
+  `format: pack-quantized`, mixed W3/W4 groups) *should* still be correctly
+  detected. This is not the bug.
+- NOT (as far as traced) a hard "3-bit unsupported" restriction —
+  `WNA16_SUPPORTED_TYPES_MAP` in
+  `vllm/model_executor/layers/quantization/compressed_tensors/schemes/compressed_tensors_wNa16.py`
+  includes `3: scalar_types.uint3b4`. Didn't fully trace kernel-dispatch logic
+  (`get_scheme`/`_get_scheme_from_parts`) far enough to rule out a narrower
+  restriction there, so this isn't fully closed out, just not a clean hit.
+
+**Next diagnostic step, not yet tried**: set `os.environ['VLLM_ENABLE_V1_MULTIPROCESSING']
+= '0'` (found in `vllm/envs.py`) *before* the `LLM(...)` call, to force the engine
+in-process so a crash surfaces its real traceback directly instead of being
+swallowed at the subprocess boundary. User ran out of Colab compute (0.43 units)
+before the drafter cell even started executing, so this is untested. **Resume here
+first** once compute is available — get the real traceback before trying anything
+else, rather than continuing to guess from source alone.
+
+If it turns out to be a genuine architectural incompatibility (vLLM's
+`draft_model` path can't load this particular compressed-tensors format/bit-width
+combo), the fallback is re-exporting a plain (uncompressed) fp16 version of the
+checkpoint from the `model_mixed` object in notebook 01 — sacrifices the
+memory-footprint story for the drafter itself (would then be a full ~3.4GB fp16
+model, not 1.18GB compressed) but should sidestep whatever this loading issue is.
+Not yet needed; get the real error first.
 
 ## Notebook 02 — RUN, real numbers (2026-07-23)
 
@@ -172,18 +215,21 @@ git push of the checkpoint was attempted and correctly blocked twice: once by
 separately via a `GITHUB_TOKEN` Colab secret for pushing the *results* JSON, which
 did successfully go through git — only the checkpoint binary itself goes via Drive).
 
-## Next step (Phase 2/3 boundary)
+## Next step
 
-1. **User is buying more Colab compute** (ran out mid-session on 2026-07-23) — once
-   that's done, run `notebooks/03_sgt_qat_drafter_bench.ipynb`. It's fully written
-   (Drive-mount-then-copy checkpoint step, `method="draft_model"`, same harness/
-   low-concurrency methodology as notebook 02, auto-loads notebook 02's latest
-   results for a 3-way comparison table).
-2. Before running notebook 03: check `NUM_PROMPTS` matches what notebook 02 actually
-   used (both currently default to 80 in the committed notebooks — confirm the
-   Colab copies agree, since hand-patched cells in a live session can drift from
-   what's in git).
-3. Real numbers exist for two of three conditions now (no-spec, EAGLE-3). Once
+1. **User is buying more Colab compute** (ran out mid-session on 2026-07-23/24,
+   twice now). Once available: set `VLLM_ENABLE_V1_MULTIPROCESSING=0` before
+   re-attempting the notebook 03 drafter cell, to get the real crash traceback —
+   see "BLOCKED" section above. This is the actual next action, not just "run
+   notebook 03" — there's an unresolved technical question first.
+2. Once the real error is known: either fix it directly, or fall back to a plain
+   uncompressed fp16 re-export of the checkpoint if it's a genuine format
+   incompatibility (see fallback plan above).
+3. Before treating any notebook 03 run as comparable to notebook 02: check
+   `NUM_PROMPTS` matches what notebook 02 actually used (both default to 80 in the
+   committed notebooks — confirm the Colab copies agree, since hand-patched cells
+   in a live session can drift from what's in git).
+4. Real numbers exist for two of three conditions now (no-spec, EAGLE-3). Once
    notebook 03 produces the third (SGT-QAT drafter), Phase 4 (packaging) can start —
    `docs/findings.md` needs the 3-way comparison write-up, still with the caveat that
    all of this used placeholder prompts, not a real benchmark dataset.
