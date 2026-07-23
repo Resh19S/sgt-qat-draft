@@ -110,6 +110,14 @@ def run_benchmark(
     llm_kwargs = llm_kwargs or {}
     torch.cuda.reset_peak_memory_stats()
 
+    # LLM(...) mutates the speculative_config dict in place (resolves it into a full
+    # SpeculativeConfig, adding fields like torch.dtype that aren't JSON-serializable).
+    # Snapshot it now so what we log below reflects what we actually passed in, not
+    # whatever vLLM turned it into afterward.
+    speculative_config_snapshot = (
+        dict(speculative_config) if speculative_config is not None else None
+    )
+
     llm = LLM(
         model=target_model,
         trust_remote_code=True,
@@ -142,7 +150,7 @@ def run_benchmark(
         timestamp=datetime.now(timezone.utc).isoformat(),
         run_name=run_name,
         target_model=target_model,
-        speculative_config=speculative_config,
+        speculative_config=speculative_config_snapshot,
         num_prompts=len(prompts),
         max_tokens=max_tokens,
         wall_clock_seconds=elapsed,
@@ -166,7 +174,10 @@ def save_result(result: BenchResult, results_dir: str | Path = "results") -> Pat
     ts = result.timestamp.replace(":", "-")
     fname = f"{result.run_name}_{ts}.json"
     path = results_dir / fname
-    path.write_text(json.dumps(asdict(result), indent=2))
+    # default=str as a safety net -- stringify anything else non-serializable that
+    # sneaks in (e.g. a future vLLM version mutating something else we didn't expect)
+    # rather than losing the whole result to a crash after the run already completed.
+    path.write_text(json.dumps(asdict(result), indent=2, default=str))
     return path
 
 
