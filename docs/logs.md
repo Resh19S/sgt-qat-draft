@@ -90,3 +90,64 @@ First Drive copy attempt silently truncated — only `config.json` and
 only ~0.64GB free, not enough for the file. Freed space and retried; confirmed
 byte-identical via `du -sh` on both the local and Drive copies (1.2G / 1.2G match).
 Checkpoint backup is now actually durable, not just attempted.
+
+Wrote notebook 03 (SGT-QAT drafter benchmark) fully, ahead of the user actually
+running it, while they worked through notebook 02 — no reason to block on that
+since the checkpoint already existed and the harness was stable. Mirrors notebook
+02's structure, adds a Drive-mount-then-copy step with a size sanity check (given
+the truncation incident above).
+
+Ran notebook 02's EAGLE-3 baseline. First attempt: `ImportError: libcudart.so.13`
+after `pip install vllm` (installed a CUDA-13-linked vLLM binary, but pip resolved
+torch to a CUDA 12.8 build — versions disagreed). Fix: the cu13 runtime lib was
+actually already present on disk (`.../nvidia/cu13/lib/libcudart.so.13`), just not
+on the linker's search path — symlinked it into `/usr/lib/x86_64-linux-gnu/` and
+ran `ldconfig`, then restarted the runtime. Worked.
+
+Next: `TypeError: Object of type dtype is not JSON serializable` in
+`bench_utils.save_result` — root cause: `LLM(...)` mutates the `speculative_config`
+dict passed to it in place (resolves it into a full `SpeculativeConfig`, adding a
+`torch.dtype` field along the way), and we were storing a reference to that same
+dict rather than a snapshot. The actual generation had already succeeded (EAGLE-3
+loaded and ran fine against Qwen3-8B — this answered the "does
+`Tengyunw/qwen3_8b_eagle3` actually work" question cleanly). Fixed by snapshotting
+`speculative_config` before passing it to `LLM()`, plus `default=str` on the
+`json.dumps` call as a general safety net. Gave the user an in-session monkeypatch
+(`save_result_fixed`) so they didn't have to redo the expensive generation step just
+to save results that already existed in memory.
+
+Then noticed the actual numbers looked wrong even once saving worked: `peak MB: 0`
+for both conditions, and EAGLE-3 at 0.98x (slightly *slower* than no-spec) despite a
+plausible acceptance length (2.07). Two real bugs, not noise:
+1. `torch.cuda.max_memory_allocated()` only sees the calling process's CUDA
+   allocations. vLLM's V1 engine runs model execution in separate worker
+   subprocess(es), so the notebook kernel's own CUDA context stays near-empty
+   regardless of actual GPU usage. Fixed: query `nvidia-smi` for whole-device memory
+   instead (`_gpu_memory_used_mb`).
+2. The 80 prompts were being submitted as one big `llm.generate(prompts)` batch.
+   Speculative decoding's throughput benefit is a low-concurrency effect (helps when
+   the GPU is memory-bandwidth-bound waiting on per-token weight loads; the benefit
+   shrinks/reverses once the GPU is already compute-saturated by heavy batching) —
+   so the batched setup was measuring the wrong thing entirely, not revealing a real
+   EAGLE-3 weakness. Fixed: `run_benchmark()` now generates prompts sequentially,
+   one at a time.
+
+Git sync friction: local machine (this Claude session) has no GitHub push
+credentials, so fixes made here couldn't reach Colab via `git pull` either (nothing
+new to pull). Worked around by hand-patching `bench_utils.py` directly in Colab via
+`%%writefile`. Also hit `git -C sgt-qat-draft pull` failing with "No such file or
+directory" — red herring, the earlier `%cd sgt-qat-draft` cell already puts you
+inside that directory, so `-C sgt-qat-draft` was looking for a nonexistent nested
+copy; plain `git pull` was correct. User decided going forward: they'll handle all
+GitHub pushes themselves from the local machine, no more routing through Colab
+(that's also what caused the notebook 02 duplicate-cell bug earlier this session —
+an editing mistake, not a Colab-vs-local sync issue, but avoiding Colab-side git
+ops reduces surface area for that class of problem regardless).
+
+After the low-concurrency + memory-metric fixes and a kernel restart (`importlib.reload`
+wasn't attempted; went straight to a full restart), re-ran notebook 02 with real
+numbers: **1.79x speedup** (76.29 → 136.76 tok/s), mean acceptance length 2.023, GPU
+memory delta +1.30GiB. Ran the full 80 prompts despite the low compute-balance
+warning (Colab flagged ~1 hour remaining at the time) — took about 4.5 + 2.5 minutes
+for the two conditions, fit within budget. See `docs/findings.md` for the full
+write-up. User is now buying more compute before proceeding to notebook 03.

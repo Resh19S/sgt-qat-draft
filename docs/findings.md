@@ -57,6 +57,63 @@ Using the prior project's "corrected recovery" formula,
 
 **Raw data**: `results/export_sgt_qat_checkpoint_seed42_2026-07-22T20-49-26.json`
 
+## 2026-07-23 — Phase 2 baseline: no-spec-decode vs. EAGLE-3 (Qwen3-8B)
+
+**Method**: `notebooks/02_baseline_eagle3.ipynb` via `notebooks/common/bench_utils.py`.
+Target model `Qwen/Qwen3-8B`, EAGLE-3 drafter `Tengyunw/qwen3_8b_eagle3`
+(`speculative_config={"method": "eagle3", "model": "Tengyunw/qwen3_8b_eagle3",
+"num_speculative_tokens": 3}`). Hardware: A100-SXM4-40GB (Colab Pro). 80 prompts,
+256 max output tokens, temperature 0, greedy. **Low-concurrency methodology**:
+prompts submitted one at a time (sequential `llm.generate([prompt])` per request),
+not batched — see caveats below for why this matters. vLLM 0.25.1
+(`pip install vllm`, not pinned to the `vendor/vllm` commit from Phase 1
+orientation). GPU memory measured via `nvidia-smi` at end-of-generation (total
+device memory in use, not `torch.cuda.max_memory_allocated()` — see caveats).
+
+**Metrics**:
+
+| | no-spec-decode | EAGLE-3 |
+|---|---|---|
+| Throughput | 76.29 tok/s | 136.76 tok/s |
+| Wall-clock (80 prompts) | 268.47s | 149.75s |
+| **Speedup** | 1.00x | **1.79x** |
+| GPU memory in use | 40,084,963,328 B (37.33 GiB) | 41,443,917,824 B (38.60 GiB) |
+| Mean acceptance length | n/a | 2.023 |
+| Per-position acceptance rate | n/a | [0.596, 0.283, 0.145] |
+| Avg draft acceptance rate | n/a | 34.1% (10,359 accepted / 30,366 drafted) |
+
+Memory delta (EAGLE-3 drafter's own weights + KV cache): **+1.30 GiB**
+(1,358,954,496 bytes).
+
+**Comparison baseline(s)**: no-speculative-decode run in the same notebook, same
+prompts, same hardware, same session (back-to-back).
+
+**Caveats / threats to validity**:
+- **Prompts are still placeholder smoke-test text** — 3 sentences cycled to fill 80
+  slots, not a real benchmark dataset (e.g. mt-bench). Directionally informative
+  (real speedup, plausible acceptance rate) but not final numbers for the paper.
+- **A first attempt at this same comparison, submitting all 80 prompts as one batch
+  to `llm.generate()`, produced 0.98x (EAGLE-3 marginally slower than no-spec) with
+  GPU memory reading 0 (a measurement bug, since fixed).** The 0.98x number is not
+  included in the table above and should not be cited — it reflects vLLM's
+  continuous batching saturating the GPU regardless of drafter, which is a real and
+  known property of speculative decoding (its throughput benefit is a
+  low-concurrency effect), not a finding about EAGLE-3 itself. Documented here so a
+  future session doesn't rediscover the same confusion; see `docs/logs.md`
+  2026-07-23 for the full debugging trail.
+- GPU memory is measured via `nvidia-smi` (whole-device usage) because vLLM's V1
+  engine runs model execution in separate worker subprocess(es) —
+  `torch.cuda.max_memory_allocated()` in the notebook kernel process sees almost
+  nothing regardless of actual usage. This is end-of-generation memory in use, not a
+  true instantaneous peak.
+- vLLM installed via plain `pip install vllm`, not pinned to the `vendor/vllm`
+  commit read during Phase 1 orientation — a deliberate speed/reproducibility
+  trade-off (see `docs/context.md`), revisit if exact-source reproducibility matters
+  later.
+
+**Raw data**: `results/no_spec_decode_2026-07-23T18-42-32.626431+00-00.json`,
+`results/baseline_eagle3_2026-07-23T18-46-18.541328+00-00.json`
+
 ## Template for future entries
 
 ### [Date] — [Experiment name]
