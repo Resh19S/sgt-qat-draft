@@ -10,12 +10,32 @@ timing and peak-memory measurement (which that example doesn't cover).
 """
 
 import json
+import subprocess
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
+
+
+def _gpu_memory_used_mb(device_index: int = 0) -> int:
+    """Total GPU memory in use, queried via nvidia-smi across ALL processes on the
+    device -- not torch.cuda.max_memory_allocated(), which only sees the current
+    process's allocations. vLLM's V1 engine runs model execution in separate worker
+    subprocess(es), so the notebook kernel's own CUDA context stays near-empty
+    regardless of what the GPU is actually doing; querying the whole device is the
+    only way to see real usage here.
+    """
+    out = subprocess.check_output(
+        [
+            "nvidia-smi",
+            f"--id={device_index}",
+            "--query-gpu=memory.used",
+            "--format=csv,noheader,nounits",
+        ]
+    )
+    return int(out.decode().strip().splitlines()[0]) * 1024 * 1024
 
 
 @dataclass
@@ -28,7 +48,7 @@ class BenchResult:
     max_tokens: int
     wall_clock_seconds: float
     tokens_per_second: float
-    peak_memory_bytes: int
+    gpu_memory_used_bytes: int
     num_drafts: int | None = None
     num_draft_tokens: int | None = None
     num_accepted_tokens: int | None = None
@@ -96,8 +116,16 @@ def run_benchmark(
     temperature: float = 0.0,
     llm_kwargs: dict | None = None,
 ) -> BenchResult:
-    """Build an LLM with the given speculative_config, run generation once, and
-    return acceptance/timing/memory metrics.
+    """Build an LLM with the given speculative_config and measure single-request
+    (low-concurrency) generation latency, one prompt at a time.
+
+    Speculative decoding's throughput benefit is a low-concurrency effect: it helps
+    when the GPU is memory-bandwidth-bound waiting on per-token weight loads, and
+    that advantage shrinks or reverses once the GPU is already compute-saturated
+    running many concurrent sequences. Submitting all prompts as one batch (which an
+    earlier version of this function did) hides the effect we're actually trying to
+    measure -- so prompts are generated sequentially here, not as one big
+    llm.generate(prompts) call.
 
     speculative_config=None -> no speculative decoding (the control run).
     speculative_config={"method": "eagle3", "model": "Tengyunw/qwen3_8b_eagle3", ...}
@@ -108,7 +136,6 @@ def run_benchmark(
     from vllm import LLM, SamplingParams
 
     llm_kwargs = llm_kwargs or {}
-    torch.cuda.reset_peak_memory_stats()
 
     # LLM(...) mutates the speculative_config dict in place (resolves it into a full
     # SpeculativeConfig, adding fields like torch.dtype that aren't JSON-serializable).
@@ -127,12 +154,18 @@ def run_benchmark(
     )
     sampling_params = SamplingParams(temperature=temperature, max_tokens=max_tokens)
 
+    outputs = []
     start = time.perf_counter()
-    outputs = llm.generate(prompts, sampling_params=sampling_params)
+    for prompt in prompts:
+        outputs.extend(llm.generate([prompt], sampling_params=sampling_params))
     elapsed = time.perf_counter() - start
 
     total_output_tokens = sum(len(o.outputs[0].token_ids) for o in outputs)
-    peak_memory_bytes = torch.cuda.max_memory_allocated()
+    # Query while llm (and its worker subprocess(es)) are still alive -- this is GPU
+    # memory in use at end-of-generation (weights + KV cache + activations), not a
+    # true instantaneous peak, but it's the meaningful "footprint" number for
+    # comparing drafters and it's robust to vLLM's process architecture.
+    gpu_memory_used_bytes = _gpu_memory_used_mb()
 
     spec_metrics = (
         extract_spec_decode_metrics(llm)
@@ -155,15 +188,19 @@ def run_benchmark(
         max_tokens=max_tokens,
         wall_clock_seconds=elapsed,
         tokens_per_second=total_output_tokens / elapsed if elapsed > 0 else 0.0,
-        peak_memory_bytes=peak_memory_bytes,
+        gpu_memory_used_bytes=gpu_memory_used_bytes,
         **spec_metrics,
     )
 
     # Free GPU memory so a subsequent run_benchmark() call in the same session
     # (e.g. no-spec vs eagle3 vs draft_model, back to back) isn't skewed by the
-    # previous LLM instance still holding VRAM.
+    # previous LLM instance still holding VRAM. vLLM's worker subprocess(es) need a
+    # moment to actually release device memory after the LLM object is collected --
+    # a fixed sleep is crude but reliable; poll-until-stable would be more precise
+    # if this proves flaky in practice.
     del llm
     torch.cuda.empty_cache()
+    time.sleep(5)
 
     return result
 
@@ -187,9 +224,9 @@ def summarize(results: list[BenchResult]) -> None:
     if not results:
         return
     baseline_tps = results[0].tokens_per_second
-    print(f"{'run':<20} {'tok/s':>10} {'speedup':>10} {'mean AL':>10} {'peak MB':>10}")
+    print(f"{'run':<20} {'tok/s':>10} {'speedup':>10} {'mean AL':>10} {'GPU MB':>10}")
     for r in results:
         speedup = r.tokens_per_second / baseline_tps if baseline_tps > 0 else float("nan")
         al = f"{r.mean_acceptance_length:.2f}" if r.mean_acceptance_length else "-"
-        mem_mb = r.peak_memory_bytes / (1024 ** 2)
+        mem_mb = r.gpu_memory_used_bytes / (1024 ** 2)
         print(f"{r.run_name:<20} {r.tokens_per_second:>10.1f} {speedup:>9.2f}x {al:>10} {mem_mb:>10.0f}")
