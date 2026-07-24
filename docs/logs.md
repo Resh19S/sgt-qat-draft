@@ -276,3 +276,29 @@ caught a related bug in our own code: the failed attempt had already run
 empty/incomplete — the `if not PLAIN_CHECKPOINT.exists()` retry guard would have
 silently skipped decompression on the next attempt. Changed to check for
 `config.json` specifically. Not yet re-run with this second fix.
+
+Ran it. New crash: `ValidationError: Invalid repository ID or local directory
+specified: 'checkpoints/qwen3-1.7b-sgt-qat-plain'` -- vLLM's `SpeculativeConfig`
+tried to resolve the relative path as a HF Hub repo id (401s) instead of
+recognizing it as a local directory. Fixed with `.resolve()` to an absolute path.
+
+Ran it again (user restarted the session to be safe). Got the *exact same*
+`weight_packed` ValueError as the very first attempt, and the log showed
+"Checkpoint size: 1.15 GiB" -- the compressed checkpoint's size, not the ~3.4GB
+plain one. First suspected a stale notebook (thought `!git pull` on the cloned
+repo folder might not sync the actually-open Colab notebook document), but user
+confirmed the notebook did have the `.resolve()` fix. Real cause, once traced
+properly: `AutoModelForCausalLM.from_pretrained()` on a compressed-tensors
+checkpoint does NOT dequantize on load -- it builds `CompressedLinear` modules
+that keep weights packed in memory, dequantizing only during `forward()` for
+inference. So the "plain" checkpoint from the first decompression attempt was
+never actually plain; `save_pretrained()` just re-serialized the same packed
+weights, hence identical size and identical crash. The `AutoModelForCausalLM`
+auto-decompress assumption was wrong from the start.
+
+Fixed properly using `compressed_tensors.ModelCompressor.decompress()`, the
+actual designed-for-this API. Also added a cheap pre-flight check (inspect the
+saved checkpoint's real safetensors tensor names for `weight_packed`, no GPU
+needed) so a similarly-broken "looks done, isn't" checkpoint can't silently pass
+the `config.json`-exists check again and waste another expensive vLLM load
+attempt finding out the hard way.
