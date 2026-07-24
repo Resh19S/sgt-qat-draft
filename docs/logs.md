@@ -219,3 +219,48 @@ that skips the `fileno()` call entirely. Set that too, on top of the multiproces
 disable, to get past this and back to chasing the original mystery — untested as of
 this entry, next attempt should show whether it actually reaches the real
 underlying issue or surfaces yet another layer.
+
+Re-ran with both env vars set. Got past the fileno() crash — target model
+(Qwen3-8B, 15.26GiB, 5 shards) loaded fine, DEBUG logging showed every weight
+tensor loading successfully. Then the draft model's weight loading started
+(`Filesystem type for checkpoints: OVERLAY. Checkpoint size: 1.15 GiB`) and hit the
+real error almost immediately:
+
+```
+ValueError: There is no module or parameter named 'layers.0.mlp.down_proj.weight_packed'
+in Qwen3Model. The available parameters belonging to layers.0.mlp.down_proj
+(RowParallelLinear) are: {'layers.0.mlp.down_proj.weight'}
+```
+
+This is the actual answer, finally. vLLM built the draft model's linear layers as
+plain unquantized `RowParallelLinear`, then failed to find the ordinary `.weight`
+tensor it expected because our checkpoint genuinely stores compressed-tensors
+packed weights under `.weight_packed`. So the very first hypothesis from
+2026-07-23 (quantization awareness not making it through for the draft model) was
+right in outcome, even though the source trace showing `quant_config`
+auto-re-derivation said it should work — apparently something downstream of that
+config resolution doesn't correctly propagate to per-layer module construction for
+draft models specifically. Not worth digging further into vLLM's internals to find
+the exact spot; the empirical answer (a real ValueError, not speculation) is
+enough to act on.
+
+**Fix, no GPU re-training needed**: reload the compressed checkpoint via
+`transformers.AutoModelForCausalLM.from_pretrained()` (compressed-tensors'
+`transformers` integration decompresses transparently on load) and re-save without
+`save_compressed=True`. Added this as a new cell in notebook 03 (decompress
+Drive-sourced checkpoint to `checkpoints/qwen3-1.7b-sgt-qat-plain/` before handing
+it to vLLM), added `compressed-tensors` to the pip installs (wasn't there before —
+only `vllm` was installed, which may or may not pull it in transitively), and
+pointed `SGT_QAT_DRAFTER` at the plain checkpoint. Also reverted the two
+diagnostic env vars (`VLLM_ENABLE_V1_MULTIPROCESSING`, `VLLM_LOGGING_LEVEL`) back
+to vLLM's defaults now that they're no longer needed for debugging — leaving DEBUG
+logging on was also what caused the earlier truncated-paste headaches.
+
+Real consequence for the paper: the drafter benchmarked going forward is a full
+~3.4GB fp16 checkpoint, not the 1.18GB compressed one. Framing this honestly in
+findings.md as a vLLM tooling limitation (draft-model quantization support), not a
+failure of the SGT-QAT export itself — notebook 01's compressed checkpoint still
+stands as valid evidence the export pipeline works, it's specifically vLLM's
+speculative-decoding drafter loader that can't consume that format yet.
+
+Not yet re-run with this fix — next step.

@@ -7,58 +7,51 @@ real progress, so a cold session can pick up without re-deriving anything.
 
 Phase 2/3 boundary. Notebook 01 (checkpoint export) and notebook 02 (EAGLE-3
 baseline) have both run successfully with real, trustworthy numbers. Notebook 03
-(SGT-QAT drafter) is written but **blocked on an unresolved vLLM loading failure**
-(see below) — not just waiting on compute anymore, there's a real technical
-question to answer first.
+(SGT-QAT drafter) was blocked on a vLLM loading failure — **root-caused and fixed
+2026-07-24** (see below), not yet re-run with the fix.
 
-## BLOCKED: notebook 03 draft_model loading (2026-07-24)
+## RESOLVED: notebook 03 draft_model loading (2026-07-24)
 
-First real attempt at loading `checkpoints/qwen3-1.7b-sgt-qat/` via
-`method="draft_model"` crashed with `RuntimeError: Engine core initialization
-failed. See root cause above. Failed core proc(s): {}` — the actual underlying
-exception from vLLM's spawned worker subprocess never appeared in the Colab cell
-output (known rough edge with vLLM's multiprocess V1 engine in notebooks).
+Root cause confirmed via the real traceback (obtained by temporarily setting
+`VLLM_ENABLE_V1_MULTIPROCESSING=0` + `VLLM_LOGGING_LEVEL=DEBUG` to bypass vLLM's
+subprocess-swallowed-crash + a Jupyter-specific `fileno()` incompatibility — both
+red herrings on the way, see `docs/logs.md` for that detour):
 
-**Ruled out via source reading in `vendor/vllm` (free, no compute cost)**:
-- NOT `DraftModelProposer` stripping quantization awareness. Initial hypothesis
-  was that `_create_draft_vllm_config()` setting `quant_config=None` disables
-  quantization for the draft model. Traced further: `vllm/config/utils.py`'s
-  `replace()` fully reconstructs the dataclass (`cls(**dict)`), which re-triggers
-  `VllmConfig.__post_init__`, which re-derives `quant_config` fresh from
-  `model_config` (the draft's own config/checkpoint) whenever it's `None`. So the
-  draft model's own `quantization_config` (confirmed present in
-  `checkpoints/qwen3-1.7b-sgt-qat/config.json` — `quant_method: compressed-tensors`,
-  `format: pack-quantized`, mixed W3/W4 groups) *should* still be correctly
-  detected. This is not the bug.
-- NOT (as far as traced) a hard "3-bit unsupported" restriction —
-  `WNA16_SUPPORTED_TYPES_MAP` in
-  `vllm/model_executor/layers/quantization/compressed_tensors/schemes/compressed_tensors_wNa16.py`
-  includes `3: scalar_types.uint3b4`. Didn't fully trace kernel-dispatch logic
-  (`get_scheme`/`_get_scheme_from_parts`) far enough to rule out a narrower
-  restriction there, so this isn't fully closed out, just not a clean hit.
+```
+ValueError: There is no module or parameter named 'layers.0.mlp.down_proj.weight_packed'
+in Qwen3Model. The available parameters belonging to layers.0.mlp.down_proj
+(RowParallelLinear) are: {'layers.0.mlp.down_proj.weight'}
+```
 
-**Update 2026-07-24**: tried `VLLM_ENABLE_V1_MULTIPROCESSING=0` — got a real
-traceback, but a different, self-inflicted one: `UnsupportedOperation: fileno`
-inside vLLM's `suppress_stdout()` (`vllm/utils/system_utils.py`), called during
-distributed-group init even for single-GPU TP=1. Root cause: Jupyter/Colab replaces
-`sys.stdout` with an object lacking `fileno()`; this only breaks when vLLM runs
-*in-process*, which is exactly what disabling multiprocessing forces — the normal
-spawned-subprocess mode wouldn't hit it. Found a bypass: `suppress_stdout()`
-early-returns (skips the `fileno()` call) when `VLLM_LOGGING_LEVEL == "DEBUG"`.
-Both env vars now set in notebook 03's setup cell. **Still untested** — this fix
-was applied and committed but not yet run again. **Resume here**: re-run notebook
-03 with both `VLLM_ENABLE_V1_MULTIPROCESSING=0` and `VLLM_LOGGING_LEVEL=DEBUG` set
-(already baked into the committed notebook) and see whether it reaches the actual
-original issue, surfaces yet another environment-specific red herring, or just
-works.
+**vLLM's `method="draft_model"` path (v0.25.1) cannot load compressed-tensors
+packed checkpoints.** It builds the draft model's linear layers as plain,
+unquantized `RowParallelLinear` (expecting an ordinary `.weight` tensor), then
+fails because our checkpoint stores packed weights under `.weight_packed`. This
+contradicts the source-level trace done earlier (`quant_config` *should* be
+re-derived correctly for the draft model per `VllmConfig.__post_init__`) — that
+trace was apparently incomplete; whatever the config-level resolution does, it
+doesn't make it through to how the draft model's `nn.Module` gets built. Not
+pursuing the exact internal reason further — the empirical fact (confirmed by a
+real traceback, not speculation) is enough to act on.
 
-If it turns out to be a genuine architectural incompatibility (vLLM's
-`draft_model` path can't load this particular compressed-tensors format/bit-width
-combo), the fallback is re-exporting a plain (uncompressed) fp16 version of the
-checkpoint from the `model_mixed` object in notebook 01 — sacrifices the
-memory-footprint story for the drafter itself (would then be a full ~3.4GB fp16
-model, not 1.18GB compressed) but should sidestep whatever this loading issue is.
-Not yet needed; get the real error first.
+**Fix applied** (`notebooks/03_sgt_qat_drafter_bench.ipynb`, committed): reload the
+compressed checkpoint via `transformers.AutoModelForCausalLM.from_pretrained()`
+(auto-decompresses through `compressed-tensors`' loading hooks) and re-save without
+`save_compressed=True`, to `checkpoints/qwen3-1.7b-sgt-qat-plain/`. `SGT_QAT_DRAFTER`
+now points at this plain checkpoint. No need to redo notebook 01's Stage 1/2 GPU
+pipeline — this is a cheap reload-and-resave. Also reverted the two diagnostic env
+vars back to vLLM's defaults now that they're no longer needed.
+
+**Consequence, already written up in `docs/findings.md`**: the drafter actually
+benchmarked will be a full ~3.4GB fp16 checkpoint, not the 1.18GB compressed one —
+the memory-footprint comparison loses its compression story for this benchmark
+specifically (tooling limitation, not a property of the SGT-QAT method — the
+compressed export from notebook 01 remains valid evidence the export pipeline
+itself works).
+
+**Not yet tried**: this fix is committed but the notebook hasn't been re-run since.
+**Resume here**: run notebook 03 fresh — should mount Drive, copy+decompress the
+checkpoint, and load it into vLLM successfully this time.
 
 ## Notebook 02 — RUN, real numbers (2026-07-23)
 
