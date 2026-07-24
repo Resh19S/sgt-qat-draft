@@ -317,3 +317,55 @@ introspection dump already had the real ones (`from_pretrained_model`,
 `decompress_model`) sitting right there. Fixed to use those:
 `ModelCompressor.from_pretrained_model(model)` then
 `compressor.decompress_model(model)`. Not yet run.
+
+Ran it: `decompress_model()` correctly unpacked `down_proj.weight` with the right
+shape (confirmed before the crash) — real progress. But crashed again with a
+*different* leftover: `ValueError: no module or parameter named
+'layers.0.mlp.down_proj.weight_scale'`. Tried stripping known quantization buffer
+names (`weight_scale`, `weight_zero_point`, `weight_shape`, `weight_g_idx`) from
+each module's `_buffers` before saving — the pre-flight validity check (already in
+place) caught that this didn't work either (`AssertionError`, cheaply, no wasted
+vLLM load). Had the user dump the actual leftover keys rather than guessing again:
+392 tensors still had `weight_scale`/`weight_shape`. Root cause: these modules
+stay a custom quantized module type even after `decompress_model()` runs, with
+their own `state_dict()`/serialization logic that keeps re-adding scale/shape
+regardless of what's deleted from `_buffers` — not simple registered buffers.
+
+**Final fix**: instead of fighting the wrapper module's serialization behavior,
+explicitly replace every such module with a genuine `nn.Linear`, copying over the
+already-correctly-dequantized weight and discarding the wrapper type entirely.
+Ran it — worked. `Replaced N quantized modules with plain nn.Linear`, verification
+passed, checkpoint saved clean.
+
+**Notebook 03 ran end to end.** Real numbers:
+`sgt_qat_drafter`: 33.69 tok/s (vs. no-spec 76.29, EAGLE-3 136.76 — **0.44x, worse
+than no speculation at all**), but mean acceptance length **2.488** vs. EAGLE-3's
+2.023 — higher at every speculative position, roughly double at positions 1-2.
+Real, striking finding: our drafter predicts the target far more reliably than
+EAGLE-3, but running a full 1.7B fp16 model as drafter is too computationally
+heavy per step to turn that into a speedup. Direct consequence of being forced
+onto the plain (uncompressed) checkpoint.
+
+Caught a real methodology inconsistency while writing this up: notebook 03's run
+used `llm_kwargs={"max_model_len": 4096}` (added earlier as an OOM mitigation)
+while notebook 02's runs used vLLM's default (40960) — this is almost certainly
+why SGT-QAT's GPU memory (37.26 GiB) read *lower* than even the no-spec baseline
+(37.33 GiB) despite loading an extra ~3.4GB model: the much smaller KV cache
+reservation more than offset the extra drafter weights. Flagged in findings.md as
+invalidating the memory row of the 3-way comparison specifically — not yet fixed
+(would need a matched re-run).
+
+Also discovered while reconstructing results for the write-up: notebook 02's
+actual `no_spec_decode_*.json`/`baseline_eagle3_*.json` files were never pushed to
+GitHub in an earlier session (`git fetch` + `git ls-tree origin/main` confirmed
+only the notebook 01 export JSON ever made it) — only their filenames were
+referenced in findings.md. Reconstructed both files from the exact data the user
+had pasted earlier in conversation and committed them, along with the new
+`sgt_qat_drafter_*.json`, so `results/` actually has what the docs reference.
+
+User asked to separately measure the *compressed* checkpoint's standalone memory
+footprint (outside vLLM, since it can't load it as a drafter anyway) to at least
+partially recover the memory story. Wrote `notebooks/04_compressed_checkpoint_memory.ipynb`
+for this — loads the compressed checkpoint directly via `transformers` (no
+decompression, no vLLM) and reads GPU memory before/after, plus the same for the
+plain checkpoint as an isolated compression-only comparison point. Not yet run.

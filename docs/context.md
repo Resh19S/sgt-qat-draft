@@ -5,10 +5,38 @@ real progress, so a cold session can pick up without re-deriving anything.
 
 ## Current phase
 
-Phase 2/3 boundary. Notebook 01 (checkpoint export) and notebook 02 (EAGLE-3
-baseline) have both run successfully with real, trustworthy numbers. Notebook 03
-(SGT-QAT drafter) was blocked on a vLLM loading failure — **root-caused and fixed
-2026-07-24** (see below), not yet re-run with the fix.
+Phase 3 done, Phase 4 (packaging) starting. Notebooks 01, 02, and 03 have all run
+successfully with real numbers, fully written up in `docs/findings.md`. Notebook 04
+(standalone compressed-checkpoint memory measurement) is written, not yet run.
+
+## Notebook 03 — RUN, real numbers (2026-07-24)
+
+SGT-QAT drafter (plain/decompressed, `checkpoints/qwen3-1.7b-sgt-qat-plain/`) vs.
+notebook 02's baselines. **Headline finding: mean acceptance length 2.488, vs.
+EAGLE-3's 2.023 — higher at every speculative position, roughly double at
+positions 1-2.** Our drafter's predictions agree with the target far more than
+EAGLE-3's. But throughput is 33.69 tok/s — *worse than no-spec-decode* (76.29
+tok/s, 0.44x) — because running a full 1.7B fp16 model as drafter is
+computationally heavy enough per step to outweigh the acceptance-rate benefit.
+Direct consequence of being forced onto the plain checkpoint (see "RESOLVED"
+section below) rather than a compressed/small one. Full numbers, all caveats
+(including a `max_model_len` mismatch that invalidates the memory comparison
+specifically) in `docs/findings.md` 2026-07-24 "Phase 3" entry.
+
+**Also fixed while processing results**: notebook 02's actual result JSON files
+(`no_spec_decode_*.json`, `baseline_eagle3_*.json`) were never actually pushed to
+GitHub — only referenced by filename in the write-up. Reconstructed both from the
+exact data pasted earlier in conversation and committed them, plus the new
+`sgt_qat_drafter_*.json`, so `results/` now actually has everything findings.md
+references and notebook 03's "Compare" cell will work on a fresh clone.
+
+**Next**: `notebooks/04_compressed_checkpoint_memory.ipynb` — written, not run.
+Measures the *genuinely compressed* checkpoint's standalone VRAM footprint (direct
+`transformers` load, no vLLM) since notebook 03 couldn't answer that question at
+all (forced onto the plain checkpoint). Not a perfect substitute for an in-vLLM
+measurement (no KV cache/serving overhead included), but real measured data,
+better than no memory story at all. Also measures the plain checkpoint the same
+way, as an isolated compression-only comparison point.
 
 ## RESOLVED: notebook 03 draft_model loading (2026-07-24)
 
@@ -215,32 +243,34 @@ git push of the checkpoint was attempted and correctly blocked twice: once by
 separately via a `GITHUB_TOKEN` Colab secret for pushing the *results* JSON, which
 did successfully go through git — only the checkpoint binary itself goes via Drive).
 
-## Next step
+## Next step (Phase 4: packaging + follow-ups)
 
-1. **User is buying more Colab compute** (ran out mid-session on 2026-07-23/24,
-   twice now). Once available: set `VLLM_ENABLE_V1_MULTIPROCESSING=0` before
-   re-attempting the notebook 03 drafter cell, to get the real crash traceback —
-   see "BLOCKED" section above. This is the actual next action, not just "run
-   notebook 03" — there's an unresolved technical question first.
-2. Once the real error is known: either fix it directly, or fall back to a plain
-   uncompressed fp16 re-export of the checkpoint if it's a genuine format
-   incompatibility (see fallback plan above).
-3. Before treating any notebook 03 run as comparable to notebook 02: check
-   `NUM_PROMPTS` matches what notebook 02 actually used (both default to 80 in the
-   committed notebooks — confirm the Colab copies agree, since hand-patched cells
-   in a live session can drift from what's in git).
-4. Real numbers exist for two of three conditions now (no-spec, EAGLE-3). Once
-   notebook 03 produces the third (SGT-QAT drafter), Phase 4 (packaging) can start —
-   `docs/findings.md` needs the 3-way comparison write-up, still with the caveat that
-   all of this used placeholder prompts, not a real benchmark dataset.
+1. Run `notebooks/04_compressed_checkpoint_memory.ipynb` — standalone VRAM
+   measurement for the genuinely compressed checkpoint (see above). Transcribe
+   results into `docs/findings.md` alongside the notebook 03 entry once done.
+2. Fix the `max_model_len` mismatch between notebook 02 (default, 40960) and
+   notebook 03 (4096) before treating the memory row of the 3-way comparison as
+   final — either re-run notebook 02 with `max_model_len=4096` too, or find a
+   different OOM mitigation for notebook 03 that doesn't require overriding it.
+   Currently flagged as a caveat in findings.md, not yet fixed.
+3. Swap placeholder prompts (3 sentences cycled to fill 80 slots) for a real
+   benchmark dataset (e.g. mt-bench, matching `spec_decode_offline.py`'s own
+   convention) across notebooks 02 and 03, and re-run both for final numbers.
+4. Once the above are resolved: `docs/findings.md` already has methods + numbers
+   for all three conditions (no-spec, EAGLE-3, SGT-QAT drafter) plus the
+   compressed-checkpoint-incompatibility finding — `docs/paper-draft.md` can start
+   drawing directly from it.
 
 ## Workflow note (2026-07-23)
 
 Local machine (this Claude session) cannot push to GitHub — no credentials
 configured here. User pushes manually from this local machine's `git push` after
-each session (previously routed some pushes through Colab directly, which caused a
-duplicate-cell editing bug once — see `docs/logs.md`). Going forward: commit locally
-here, user handles all pushes, no need to re-flag the credential issue each time.
+each session. **Confirmed 2026-07-24: `origin/main` is currently several commits
+behind this local machine** (stuck at `657051b`, missing all of notebook 03's
+debugging fixes and the reconstructed `results/` files) — a push from here is
+overdue. Also confirmed: notebook 02's actual result JSON files were never
+pushed at all in an earlier session (only referenced by filename) — reconstructed
+and committed locally 2026-07-24, still needs to reach GitHub too.
 
 ## Open questions / decisions pending
 
@@ -248,6 +278,11 @@ here, user handles all pushes, no need to re-flag the credential issue each time
   or was specific to this A100 run — flagged in findings.md, not yet re-checked.
 - Exact vLLM version/commit to pin for reproducibility — deliberately deferred
   (plain `pip install vllm` used for notebook 02), revisit if it matters later.
-- Prompts are placeholder smoke-test text throughout Phase 2 so far — a real
-  benchmark dataset (e.g. mt-bench, matching vLLM's own example convention) is
-  needed before any of these numbers are final/paper-ready.
+- Prompts are placeholder smoke-test text throughout — a real benchmark dataset
+  is needed before any of these numbers are final/paper-ready (see Next step #3).
+- `max_model_len` mismatch invalidating the notebook 03 memory comparison — see
+  Next step #2.
+- Whether SGT-QAT's higher acceptance rate (2.488 vs. EAGLE-3's 2.023) would
+  translate into an actual speedup win if the compressed checkpoint could be
+  loaded — plausible given the quality signal, but unverified; blocked on vLLM
+  gaining compressed-tensors draft-model support (or us building a workaround).

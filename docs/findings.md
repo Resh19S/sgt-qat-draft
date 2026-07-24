@@ -142,13 +142,22 @@ correctly re-deriving `quant_config` for the draft model from its own
 model's actual `nn.Module` layers get constructed. **vLLM's `method="draft_model"`
 path, as of v0.25.1, does not support compressed-tensors packed draft checkpoints.**
 
-**Fix adopted**: notebook 03 now reloads the compressed checkpoint via
-`transformers.AutoModelForCausalLM.from_pretrained()` (which decompresses
-transparently through `compressed-tensors`' loading hooks, dequantizing back to
-plain fp16 tensors) and re-saves it without `save_compressed=True`, to
-`checkpoints/qwen3-1.7b-sgt-qat-plain/`. This is loaded into vLLM instead of the
-compressed checkpoint. No re-running of notebook 01's Stage 1/2 GPU pipeline
-required — this is a cheap reload-and-resave of the already-exported checkpoint.
+**Fix adopted**: notebook 03 now reloads the compressed checkpoint and genuinely
+decompresses it before re-saving without `save_compressed=True`, to
+`checkpoints/qwen3-1.7b-sgt-qat-plain/`. This took several attempts to get right —
+`AutoModelForCausalLM.from_pretrained()` alone does *not* dequantize (keeps weights
+packed in `CompressedLinear` modules, dequantizing only at inference time), and
+`hf_quantizer.dequantize()` raises `NotImplementedError` for this quant method in
+the installed `transformers` version. The working approach:
+`compressed_tensors.ModelCompressor.from_pretrained_model(model)` +
+`.decompress_model(model)` to unpack weights, then explicitly replacing each
+still-quantized-typed module with a genuine `nn.Linear` (the wrapper module's own
+serialization logic kept re-adding `weight_scale`/`weight_shape` even after the
+underlying buffers were deleted). Verified via direct inspection of the saved
+checkpoint's safetensors tensor names (no leftover quantization-related keys)
+before attempting the (expensive) vLLM load again. Full debugging trail in
+`docs/logs.md` 2026-07-24. No re-running of notebook 01's Stage 1/2 GPU pipeline
+required — this is a reload-and-resave of the already-exported checkpoint.
 
 **Consequence for the memory-footprint comparison**: the drafter actually
 benchmarked in notebook 03 is a full ~3.4GB fp16 checkpoint, not the 1.18GB
@@ -165,6 +174,76 @@ speculative-decoding drafter loader that can't consume it yet.
 see `docs/logs.md` 2026-07-24 for the full debugging trail including the two red
 herrings (`fileno()` crash, quantization-config source trace) encountered along
 the way.
+
+## 2026-07-24 — Phase 3: SGT-QAT drafter vs. EAGLE-3 vs. no-spec-decode (Qwen3-8B)
+
+**Method**: `notebooks/03_sgt_qat_drafter_bench.ipynb`, same harness and
+low-concurrency methodology as the 2026-07-23 EAGLE-3 baseline. Drafter:
+`checkpoints/qwen3-1.7b-sgt-qat-plain/` — the **decompressed** SGT-QAT checkpoint
+(see the entry above; vLLM's `draft_model` path cannot load the genuinely
+compressed 1.18GB checkpoint, so this is a plain ~3.4GB fp16 version of the same
+trained weights). `speculative_config={"method": "draft_model", "model": <plain
+checkpoint path>, "num_speculative_tokens": 3}`. 80 prompts (same placeholder set
+as the other two conditions), 256 max output tokens, temperature 0. **One
+methodological difference from the other two conditions**: `llm_kwargs={"max_model_len":
+4096}` was set for this run only (to avoid an OOM risk from loading a second full
+model alongside the 8B target on a single A100-40GB) — the no-spec/EAGLE-3 runs
+used vLLM's default (40960). See caveats.
+
+**Metrics**:
+
+| | no-spec-decode | EAGLE-3 | SGT-QAT drafter |
+|---|---|---|---|
+| Throughput | 76.29 tok/s | 136.76 tok/s | 33.69 tok/s |
+| Wall-clock (80 prompts) | 268.47s | 149.75s | 607.90s |
+| **Speedup vs. no-spec** | 1.00x | 1.79x | **0.44x** |
+| GPU memory in use | 37.33 GiB | 38.60 GiB | 37.26 GiB (not comparable — see caveats) |
+| Mean acceptance length | n/a | 2.023 | **2.488** |
+| Per-position acceptance rate | n/a | [0.596, 0.283, 0.145] | **[0.689, 0.474, 0.325]** |
+| Avg draft acceptance rate | n/a | 34.1% | **49.6%** (12,218 / 24,627) |
+
+**Headline finding**: the SGT-QAT drafter achieves a **substantially higher
+acceptance rate than EAGLE-3 at every speculative position** — roughly double at
+positions 1 and 2, and meaningfully higher at position 0. This is a genuinely
+strong quality signal: the target model agrees with our drafter's predictions far
+more often than with EAGLE-3's. However, wall-clock throughput is *worse than no
+speculation at all* (0.44x) — running a full 1.7B fp16 model as the drafter is
+computationally heavy enough per step that the compute cost outweighs the benefit
+of the higher acceptance rate. This is the direct, expected consequence of being
+forced to use the plain (uncompressed) checkpoint (see the entry above) rather
+than a small or genuinely compressed drafter — the quality signal is real, but
+this particular deployment path can't currently turn it into a speedup.
+
+**Comparison baseline(s)**: no-spec-decode and EAGLE-3 runs from
+`notebooks/02_baseline_eagle3.ipynb`, same target model, same prompts, same
+hardware, different sessions (not back-to-back — see caveats).
+
+**Caveats / threats to validity**:
+- **Drafter is the plain/uncompressed checkpoint**, not the genuinely compressed
+  one — see the 2026-07-24 finding above. The acceptance-rate numbers are still
+  valid (same trained weight values, decompression is lossless dequantization),
+  but the speed/memory numbers reflect a full-precision 1.7B drafter, not what a
+  real compressed deployment would look like.
+- **`max_model_len` mismatch invalidates the memory comparison specifically**: this
+  run used `max_model_len=4096`, the other two used the default 40960. Smaller
+  `max_model_len` means much smaller reserved KV cache, which is almost certainly
+  why this run's GPU memory (37.26 GiB) reads *lower* than the no-spec baseline
+  (37.33 GiB) despite loading an extra ~3.4GB model — the KV cache reduction more
+  than offset the extra drafter weights. **Do not cite the memory row above as a
+  real comparison.** Fix before finalizing: either re-run notebook 02 with
+  `max_model_len=4096` too, or re-run notebook 03 without the override (accepting
+  the OOM risk, or finding a different mitigation) so all three conditions match.
+- **Not run back-to-back in the same session** as notebook 02 (separate Colab
+  sessions across 2026-07-23 and 2026-07-24) — GPU/driver state could differ
+  slightly, though unlikely to explain effects of this magnitude.
+- Placeholder prompts throughout (see prior entries) — not a real benchmark
+  dataset yet.
+- See `docs/context.md`/`docs/logs.md` for a planned follow-up (`notebooks/04`):
+  measuring the *genuinely compressed* checkpoint's standalone VRAM footprint
+  (loaded directly via `transformers`, not through vLLM) to at least partially
+  recover the memory story this benchmark couldn't answer.
+
+**Raw data**: `results/sgt_qat_drafter_2026-07-24T17-12-10.285012+00-00.json`
 
 ## Template for future entries
 
