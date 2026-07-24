@@ -302,3 +302,18 @@ saved checkpoint's real safetensors tensor names for `weight_packed`, no GPU
 needed) so a similarly-broken "looks done, isn't" checkpoint can't silently pass
 the `config.json`-exists check again and waste another expensive vLLM load
 attempt finding out the hard way.
+
+Tried `hf_quantizer.dequantize(model)` next (confirmed via introspection to
+exist and be bound to the loaded model already) — raised
+`NotImplementedError: QuantizationMethod.COMPRESSED_TENSORS has no
+implementation of dequantize` from `transformers/quantizers/base.py`. So the
+generic transformers-side dequantize path is just not implemented for this
+quant method in the installed version — not something we can work around at
+that level.
+
+Went back to `ModelCompressor` — realized the second attempt had used wrong
+method names (`from_pretrained`/`decompress`, guessed) when the *first*
+introspection dump already had the real ones (`from_pretrained_model`,
+`decompress_model`) sitting right there. Fixed to use those:
+`ModelCompressor.from_pretrained_model(model)` then
+`compressor.decompress_model(model)`. Not yet run.
