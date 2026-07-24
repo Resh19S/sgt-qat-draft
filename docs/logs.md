@@ -264,3 +264,15 @@ stands as valid evidence the export pipeline works, it's specifically vLLM's
 speculative-decoding drafter loader that can't consume that format yet.
 
 Not yet re-run with this fix — next step.
+
+Ran it: decompression load worked, but `save_pretrained()` on the decompressed
+model crashed with `AttributeError: 'NoneType' object has no attribute 'convert'`
+inside `transformers`' `revert_weight_conversion` internals — a bug in this
+transformers version's weight-name-reversion logic specific to
+compressed-tensors-derived models. Fixed with `save_original_format=False` (skips
+that step; we don't need original-format weight names for our purposes). Also
+caught a related bug in our own code: the failed attempt had already run
+`PLAIN_CHECKPOINT.mkdir()` before crashing, so the directory existed but was
+empty/incomplete — the `if not PLAIN_CHECKPOINT.exists()` retry guard would have
+silently skipped decompression on the next attempt. Changed to check for
+`config.json` specifically. Not yet re-run with this second fix.
