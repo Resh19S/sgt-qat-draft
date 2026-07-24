@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-07-24T17:39:17.319534+00:00",
+  "run_name": "no_spec_decode",
+  "target_model": "Qwen/Qwen3-8B",
+  "speculative_config": null,
+  "num_prompts": 80,
+  "max_tokens": 256,
+  "wall_clock_seconds": 266.90296526,
+  "tokens_per_second": 76.73200625571799,
+  "gpu_memory_used_bytes": 39460012032,
+  "num_drafts": null,
+  "num_draft_tokens": null,
+  "num_accepted_tokens": null,
+  "mean_acceptance_length": null,
+  "acceptance_rate_by_position": [],
+  "notes": ""
+}

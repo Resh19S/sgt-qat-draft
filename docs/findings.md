@@ -178,29 +178,39 @@ the way.
 ## 2026-07-24 — Phase 3: SGT-QAT drafter vs. EAGLE-3 vs. no-spec-decode (Qwen3-8B)
 
 **Method**: `notebooks/03_sgt_qat_drafter_bench.ipynb`, same harness and
-low-concurrency methodology as the 2026-07-23 EAGLE-3 baseline. Drafter:
+low-concurrency methodology as the EAGLE-3 baseline. Drafter:
 `checkpoints/qwen3-1.7b-sgt-qat-plain/` — the **decompressed** SGT-QAT checkpoint
 (see the entry above; vLLM's `draft_model` path cannot load the genuinely
 compressed 1.18GB checkpoint, so this is a plain ~3.4GB fp16 version of the same
 trained weights). `speculative_config={"method": "draft_model", "model": <plain
 checkpoint path>, "num_speculative_tokens": 3}`. 80 prompts (same placeholder set
-as the other two conditions), 256 max output tokens, temperature 0. **One
-methodological difference from the other two conditions**: `llm_kwargs={"max_model_len":
-4096}` was set for this run only (to avoid an OOM risk from loading a second full
-model alongside the 8B target on a single A100-40GB) — the no-spec/EAGLE-3 runs
-used vLLM's default (40960). See caveats.
+as the other two conditions), 256 max output tokens, temperature 0,
+`max_model_len=4096`. The no-spec/EAGLE-3 baselines were **re-run 2026-07-24
+with `max_model_len=4096` to match** (the original 2026-07-23 baseline run used
+vLLM's default, 40960 — see "Speed comparison" below for why this was fixed and
+what it confirmed).
 
-**Metrics**:
+**Metrics** (all three conditions now share `max_model_len=4096`):
 
 | | no-spec-decode | EAGLE-3 | SGT-QAT drafter |
 |---|---|---|---|
-| Throughput | 76.29 tok/s | 136.76 tok/s | 33.69 tok/s |
-| Wall-clock (80 prompts) | 268.47s | 149.75s | 607.90s |
-| **Speedup vs. no-spec** | 1.00x | 1.79x | **0.44x** |
-| GPU memory in use | 37.33 GiB | 38.60 GiB | 37.26 GiB (not comparable — see caveats) |
+| Throughput | 76.73 tok/s | 136.58 tok/s | 33.69 tok/s |
+| Wall-clock (80 prompts) | 266.90s | 149.95s | 607.90s |
+| **Speedup vs. no-spec** | 1.00x | 1.78x | **0.44x** |
+| GPU memory in use | 36.75 GiB | 37.80 GiB | 37.26 GiB (still not directly comparable — see caveats) |
 | Mean acceptance length | n/a | 2.023 | **2.488** |
 | Per-position acceptance rate | n/a | [0.596, 0.283, 0.145] | **[0.689, 0.474, 0.325]** |
 | Avg draft acceptance rate | n/a | 34.1% | **49.6%** (12,218 / 24,627) |
+
+**Speed comparison — now airtight.** The no-spec/EAGLE-3 baselines were originally
+measured with vLLM's default `max_model_len` (40960) while the SGT-QAT run used
+4096 (an OOM mitigation) — a real methodological gap. Re-running the baselines
+with `max_model_len=4096` to match moved throughput by <1% in both cases
+(76.29→76.73 tok/s, 136.76→136.58 tok/s) and left mean acceptance length
+unchanged (2.0234 both times) — confirming `max_model_len` has no meaningful
+effect on speed/acceptance at these sequence lengths, as expected. **The speed and
+acceptance-rate comparisons in this table are now on solid methodological
+footing.**
 
 **Headline finding**: the SGT-QAT drafter achieves a **substantially higher
 acceptance rate than EAGLE-3 at every speculative position** — roughly double at
@@ -215,8 +225,9 @@ than a small or genuinely compressed drafter — the quality signal is real, but
 this particular deployment path can't currently turn it into a speedup.
 
 **Comparison baseline(s)**: no-spec-decode and EAGLE-3 runs from
-`notebooks/02_baseline_eagle3.ipynb`, same target model, same prompts, same
-hardware, different sessions (not back-to-back — see caveats).
+`notebooks/02_baseline_eagle3.ipynb`, `max_model_len=4096`-matched re-run,
+2026-07-24. Same target model, same prompts, same hardware — but a different
+Colab session/VM instance than the SGT-QAT run (see caveats on GPU memory).
 
 **Caveats / threats to validity**:
 - **Drafter is the plain/uncompressed checkpoint**, not the genuinely compressed
@@ -224,26 +235,32 @@ hardware, different sessions (not back-to-back — see caveats).
   valid (same trained weight values, decompression is lossless dequantization),
   but the speed/memory numbers reflect a full-precision 1.7B drafter, not what a
   real compressed deployment would look like.
-- **`max_model_len` mismatch invalidates the memory comparison specifically**: this
-  run used `max_model_len=4096`, the other two used the default 40960. Smaller
-  `max_model_len` means much smaller reserved KV cache, which is almost certainly
-  why this run's GPU memory (37.26 GiB) reads *lower* than the no-spec baseline
-  (37.33 GiB) despite loading an extra ~3.4GB model — the KV cache reduction more
-  than offset the extra drafter weights. **Do not cite the memory row above as a
-  real comparison.** Fix before finalizing: either re-run notebook 02 with
-  `max_model_len=4096` too, or re-run notebook 03 without the override (accepting
-  the OOM risk, or finding a different mitigation) so all three conditions match.
-- **Not run back-to-back in the same session** as notebook 02 (separate Colab
-  sessions across 2026-07-23 and 2026-07-24) — GPU/driver state could differ
-  slightly, though unlikely to explain effects of this magnitude.
+- **GPU memory still not directly comparable, for a different reason than
+  before**: `max_model_len` is now matched across all three conditions (fixed
+  2026-07-24), which resolves the KV-cache-size confound. But `gpu_memory_used_bytes`
+  is an *absolute whole-device* reading (via `nvidia-smi`), and the SGT-QAT run
+  was measured in a **different Colab session/VM instance** than the no-spec/EAGLE-3
+  baselines (different day, not back-to-back) — absolute memory readings across
+  different runtime instances aren't guaranteed comparable (different baseline
+  driver/OS overhead, etc.), independent of any config matching. Memory is
+  explicitly deprioritized for now (see `docs/context.md`) — `notebooks/04` (see
+  below) targets a different, session-independent angle on this instead of chasing
+  a same-session 3-way re-run.
 - Placeholder prompts throughout (see prior entries) — not a real benchmark
   dataset yet.
-- See `docs/context.md`/`docs/logs.md` for a planned follow-up (`notebooks/04`):
+- See `docs/context.md`/`docs/logs.md` for the planned follow-up (`notebooks/04`):
   measuring the *genuinely compressed* checkpoint's standalone VRAM footprint
   (loaded directly via `transformers`, not through vLLM) to at least partially
   recover the memory story this benchmark couldn't answer.
 
 **Raw data**: `results/sgt_qat_drafter_2026-07-24T17-12-10.285012+00-00.json`
+(SGT-QAT drafter, `max_model_len=4096`),
+`results/no_spec_decode_2026-07-24T17-39-17.319534+00-00.json`,
+`results/baseline_eagle3_2026-07-24T17-44-02.392776+00-00.json` (baselines,
+`max_model_len=4096`-matched re-run). The original 2026-07-23
+`max_model_len=40960` baseline run (`results/no_spec_decode_2026-07-23T18-42-32...json`,
+`results/baseline_eagle3_2026-07-23T18-46-18...json`) is superseded for this
+comparison but kept for the record.
 
 ## Template for future entries
 

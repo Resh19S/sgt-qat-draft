@@ -5,9 +5,11 @@ real progress, so a cold session can pick up without re-deriving anything.
 
 ## Current phase
 
-Phase 3 done, Phase 4 (packaging) starting. Notebooks 01, 02, and 03 have all run
-successfully with real numbers, fully written up in `docs/findings.md`. Notebook 04
-(standalone compressed-checkpoint memory measurement) is written, not yet run.
+Phase 3 done, Phase 4 (packaging) in progress. Notebooks 01, 02, and 03 have all
+run successfully with real numbers, fully written up in `docs/findings.md`,
+**speed/acceptance comparison confirmed airtight (2026-07-24)**. Notebook 04
+(standalone compressed-checkpoint memory measurement) is written, not yet run —
+memory is intentionally deferred (see below).
 
 ## Notebook 03 — RUN, real numbers (2026-07-24)
 
@@ -15,28 +17,44 @@ SGT-QAT drafter (plain/decompressed, `checkpoints/qwen3-1.7b-sgt-qat-plain/`) vs
 notebook 02's baselines. **Headline finding: mean acceptance length 2.488, vs.
 EAGLE-3's 2.023 — higher at every speculative position, roughly double at
 positions 1-2.** Our drafter's predictions agree with the target far more than
-EAGLE-3's. But throughput is 33.69 tok/s — *worse than no-spec-decode* (76.29
+EAGLE-3's. But throughput is 33.69 tok/s — *worse than no-spec-decode* (76.73
 tok/s, 0.44x) — because running a full 1.7B fp16 model as drafter is
 computationally heavy enough per step to outweigh the acceptance-rate benefit.
 Direct consequence of being forced onto the plain checkpoint (see "RESOLVED"
-section below) rather than a compressed/small one. Full numbers, all caveats
-(including a `max_model_len` mismatch that invalidates the memory comparison
-specifically) in `docs/findings.md` 2026-07-24 "Phase 3" entry.
+section below) rather than a compressed/small one. Full numbers in
+`docs/findings.md` "Phase 3" entry.
+
+**`max_model_len` mismatch — fixed and verified (2026-07-24)**: notebook 03 used
+`max_model_len=4096` (OOM mitigation), notebook 02 originally used the default
+40960. Added `MAX_MODEL_LEN=4096` to notebook 02 and re-ran both its conditions.
+Result: throughput moved <1% (76.29→76.73, 136.76→136.58 tok/s), acceptance
+length unchanged (2.0234 both times) — **confirms `max_model_len` doesn't
+meaningfully affect speed/acceptance at these sequence lengths, so the speed and
+acceptance-rate comparisons are now on solid footing.** Memory remains not
+directly comparable, but now for a *different* reason: `gpu_memory_used_bytes` is
+an absolute whole-device reading, and the SGT-QAT run was a different Colab
+session/VM instance than the (re-run) baselines — config matching alone can't
+fix a cross-session absolute-memory comparison. User explicitly deprioritized
+chasing a same-session 3-way re-run for this; `notebooks/04` targets a
+session-independent angle instead (see below).
 
 **Also fixed while processing results**: notebook 02's actual result JSON files
 (`no_spec_decode_*.json`, `baseline_eagle3_*.json`) were never actually pushed to
-GitHub — only referenced by filename in the write-up. Reconstructed both from the
-exact data pasted earlier in conversation and committed them, plus the new
-`sgt_qat_drafter_*.json`, so `results/` now actually has everything findings.md
-references and notebook 03's "Compare" cell will work on a fresh clone.
+GitHub — only referenced by filename in the write-up. Reconstructed the original
+(2026-07-23, `max_model_len=40960`) ones from data pasted earlier in conversation,
+plus the new 2026-07-24 `max_model_len=4096`-matched re-run of both, plus
+`sgt_qat_drafter_*.json` — `results/` now actually has everything findings.md
+references.
 
 **Next**: `notebooks/04_compressed_checkpoint_memory.ipynb` — written, not run.
 Measures the *genuinely compressed* checkpoint's standalone VRAM footprint (direct
 `transformers` load, no vLLM) since notebook 03 couldn't answer that question at
-all (forced onto the plain checkpoint). Not a perfect substitute for an in-vLLM
-measurement (no KV cache/serving overhead included), but real measured data,
-better than no memory story at all. Also measures the plain checkpoint the same
-way, as an isolated compression-only comparison point.
+all (forced onto the plain checkpoint), and sidesteps the cross-session issue by
+being a self-contained standalone measurement rather than something meant to
+diff against notebook 02/03's in-vLLM numbers directly. Not a perfect substitute
+for an in-vLLM measurement (no KV cache/serving overhead included), but real
+measured data, better than no memory story at all. Also measures the plain
+checkpoint the same way, as an isolated compression-only comparison point.
 
 ## RESOLVED: notebook 03 draft_model loading (2026-07-24)
 
@@ -245,21 +263,20 @@ did successfully go through git — only the checkpoint binary itself goes via D
 
 ## Next step (Phase 4: packaging + follow-ups)
 
-1. Run `notebooks/04_compressed_checkpoint_memory.ipynb` — standalone VRAM
-   measurement for the genuinely compressed checkpoint (see above). Transcribe
-   results into `docs/findings.md` alongside the notebook 03 entry once done.
-2. Fix the `max_model_len` mismatch between notebook 02 (default, 40960) and
-   notebook 03 (4096) before treating the memory row of the 3-way comparison as
-   final — either re-run notebook 02 with `max_model_len=4096` too, or find a
-   different OOM mitigation for notebook 03 that doesn't require overriding it.
-   Currently flagged as a caveat in findings.md, not yet fixed.
+1. ~~Fix the `max_model_len` mismatch~~ — **done 2026-07-24**, speed/acceptance
+   comparison confirmed airtight (see above).
+2. Run `notebooks/04_compressed_checkpoint_memory.ipynb` — standalone VRAM
+   measurement for the genuinely compressed checkpoint, deliberately
+   session-independent (see above). Transcribe results into `docs/findings.md`
+   alongside the notebook 03 entry once done. Memory otherwise stays deprioritized
+   per user's explicit call.
 3. Swap placeholder prompts (3 sentences cycled to fill 80 slots) for a real
    benchmark dataset (e.g. mt-bench, matching `spec_decode_offline.py`'s own
    convention) across notebooks 02 and 03, and re-run both for final numbers.
-4. Once the above are resolved: `docs/findings.md` already has methods + numbers
-   for all three conditions (no-spec, EAGLE-3, SGT-QAT drafter) plus the
+4. `docs/findings.md` already has solid methods + numbers for all three
+   conditions (no-spec, EAGLE-3, SGT-QAT drafter) plus the
    compressed-checkpoint-incompatibility finding — `docs/paper-draft.md` can start
-   drawing directly from it.
+   drawing directly from it, once placeholder prompts are resolved (#3).
 
 ## Workflow note (2026-07-23)
 
@@ -280,8 +297,8 @@ and committed locally 2026-07-24, still needs to reach GitHub too.
   (plain `pip install vllm` used for notebook 02), revisit if it matters later.
 - Prompts are placeholder smoke-test text throughout — a real benchmark dataset
   is needed before any of these numbers are final/paper-ready (see Next step #3).
-- `max_model_len` mismatch invalidating the notebook 03 memory comparison — see
-  Next step #2.
+- Memory comparison remains open (cross-session absolute-reading issue, not
+  `max_model_len` anymore) — deliberately deprioritized, see Next step #2.
 - Whether SGT-QAT's higher acceptance rate (2.488 vs. EAGLE-3's 2.023) would
   translate into an actual speedup win if the compressed checkpoint could be
   loaded — plausible given the quality signal, but unverified; blocked on vLLM

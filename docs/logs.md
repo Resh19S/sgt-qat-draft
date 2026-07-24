@@ -369,3 +369,26 @@ partially recover the memory story. Wrote `notebooks/04_compressed_checkpoint_me
 for this — loads the compressed checkpoint directly via `transformers` (no
 decompression, no vLLM) and reads GPU memory before/after, plus the same for the
 plain checkpoint as an isolated compression-only comparison point. Not yet run.
+
+User wanted the speed comparison made airtight before moving on, deferring memory
+(already bucketed as "tooling unsupported") to later. Added `MAX_MODEL_LEN=4096`
+to notebook 02's config cell and passed it via `llm_kwargs` to both `run_benchmark()`
+calls, matching notebook 03 exactly, then re-ran notebook 02.
+
+Result: throughput moved <1% (no-spec 76.29→76.73 tok/s, EAGLE-3 136.76→136.58
+tok/s), mean acceptance length identical (2.0234143449911084 both times, to full
+float precision even) — clean confirmation that `max_model_len` doesn't
+meaningfully affect speed or acceptance at these sequence lengths (unsurprising:
+our prompts + 256 output tokens are way under even 4096). Speed/acceptance
+comparison in findings.md is now solid.
+
+Memory, however, turned out to have a *second*, independent problem beyond the
+`max_model_len` mismatch: `gpu_memory_used_bytes` is an absolute whole-device
+`nvidia-smi` reading, and the SGT-QAT run was measured in a completely different
+Colab session (different day, different VM instance) than these baselines —
+config matching alone doesn't make absolute memory readings across different
+runtime instances comparable. Documented this clearly rather than pretend the
+`max_model_len` fix solved memory too. Reconstructed and committed both new
+result files (`no_spec_decode_2026-07-24T17-39-17...`,
+`baseline_eagle3_2026-07-24T17-44-02...`) from the pasted `BenchResult` reprs,
+same as before.
