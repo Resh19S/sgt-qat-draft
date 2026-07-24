@@ -37,13 +37,20 @@ output (known rough edge with vLLM's multiprocess V1 engine in notebooks).
   (`get_scheme`/`_get_scheme_from_parts`) far enough to rule out a narrower
   restriction there, so this isn't fully closed out, just not a clean hit.
 
-**Next diagnostic step, not yet tried**: set `os.environ['VLLM_ENABLE_V1_MULTIPROCESSING']
-= '0'` (found in `vllm/envs.py`) *before* the `LLM(...)` call, to force the engine
-in-process so a crash surfaces its real traceback directly instead of being
-swallowed at the subprocess boundary. User ran out of Colab compute (0.43 units)
-before the drafter cell even started executing, so this is untested. **Resume here
-first** once compute is available — get the real traceback before trying anything
-else, rather than continuing to guess from source alone.
+**Update 2026-07-24**: tried `VLLM_ENABLE_V1_MULTIPROCESSING=0` — got a real
+traceback, but a different, self-inflicted one: `UnsupportedOperation: fileno`
+inside vLLM's `suppress_stdout()` (`vllm/utils/system_utils.py`), called during
+distributed-group init even for single-GPU TP=1. Root cause: Jupyter/Colab replaces
+`sys.stdout` with an object lacking `fileno()`; this only breaks when vLLM runs
+*in-process*, which is exactly what disabling multiprocessing forces — the normal
+spawned-subprocess mode wouldn't hit it. Found a bypass: `suppress_stdout()`
+early-returns (skips the `fileno()` call) when `VLLM_LOGGING_LEVEL == "DEBUG"`.
+Both env vars now set in notebook 03's setup cell. **Still untested** — this fix
+was applied and committed but not yet run again. **Resume here**: re-run notebook
+03 with both `VLLM_ENABLE_V1_MULTIPROCESSING=0` and `VLLM_LOGGING_LEVEL=DEBUG` set
+(already baked into the committed notebook) and see whether it reaches the actual
+original issue, surfaces yet another environment-specific red herring, or just
+works.
 
 If it turns out to be a genuine architectural incompatibility (vLLM's
 `draft_model` path can't load this particular compressed-tensors format/bit-width

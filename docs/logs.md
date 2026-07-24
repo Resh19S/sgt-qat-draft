@@ -194,3 +194,28 @@ the subprocess boundary. **Not yet tried** — user ran out of Colab compute bef
 the drafter cell even started executing (0.43 units wasn't enough headroom).
 Paused here; resume with the `VLLM_ENABLE_V1_MULTIPROCESSING=0` env var set before
 re-attempting, once compute is available again.
+
+## 2026-07-24
+
+User got more compute, re-ran notebook 03 with `VLLM_ENABLE_V1_MULTIPROCESSING=0`
+baked in. Got a real traceback this time, but a *different* one:
+`UnsupportedOperation: fileno` inside vLLM's `suppress_stdout()` helper
+(`vllm/utils/system_utils.py`), called during distributed-group init
+(`init_distributed_environment` → `suppress_stdout()` → `sys.stdout.fileno()`) —
+happens even for a single-GPU TP=1 setup, since vLLM still sets up a `gloo`
+process group for CPU-side coordination. Root cause: Jupyter/Colab replaces
+`sys.stdout` with `ipykernel.iostream.OutStream`, which doesn't implement
+`fileno()` (no real OS file descriptor backing it) — this only matters when vLLM's
+engine runs *in-process* inside the notebook kernel, which is exactly what
+disabling multiprocessing forced. The normal spawned-subprocess mode wouldn't hit
+this, since each worker subprocess has its own genuine stdout.
+
+So the multiprocessing-disable diagnostic traded the original hidden crash for a
+new, self-inflicted, environment-specific one — informative in its own way (now we
+know in-process mode doesn't work cleanly in this notebook environment at all) but
+not yet the answer to the original question. Found a clean bypass:
+`suppress_stdout()` has a built-in early-return when `VLLM_LOGGING_LEVEL == "DEBUG"`
+that skips the `fileno()` call entirely. Set that too, on top of the multiprocessing
+disable, to get past this and back to chasing the original mystery — untested as of
+this entry, next attempt should show whether it actually reaches the real
+underlying issue or surfaces yet another layer.
