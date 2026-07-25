@@ -68,8 +68,9 @@ the prior QAT paper.
 - `docs/paper-draft.md` — empty until the user starts drafting the second paper.
 - `results/` — one JSON (or CSV) file per benchmark run, timestamped filename, same
   convention as the prior project's `results/`.
-- No GitHub remote is configured yet. The user will provide one later to pair progress
-  — don't set one up unprompted.
+- GitHub remote is configured: `origin` → `Resh19S/sgt-qat-draft`. User pushes
+  manually from the local machine; this session commits locally but does not push
+  (no credentials here) unless explicitly asked to attempt it.
 
 ## Phase 1-4 definition of done
 

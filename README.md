@@ -32,6 +32,9 @@ mirroring the prior project's notebook-driven workflow:
 - `02_baseline_eagle3.ipynb` — vLLM's built-in EAGLE-3 spec-decode baseline.
 - `03_sgt_qat_drafter_bench.ipynb` — benchmarks the exported SGT-QAT checkpoint as a
   drafter, same harness as `02`.
+- `04_compressed_checkpoint_memory.ipynb` — standalone VRAM footprint of the
+  genuinely compressed checkpoint (vLLM can't load it as a drafter directly — see
+  `docs/findings.md`).
 
 ### 3. Results & docs
 
@@ -43,4 +46,8 @@ mirroring the prior project's notebook-driven workflow:
 
 ## Status
 
-Phase 1 (orientation) in progress. See `docs/context.md` for current state.
+Phase 3 complete, Phase 4 (packaging) in progress. Notebooks 01-03 have all run
+with real numbers: SGT-QAT drafter beats EAGLE-3 on acceptance rate (2.488 vs.
+2.023 mean acceptance length) but loses on realized speed (0.44x vs. 1.79x),
+because vLLM can't load the drafter in its intended compressed form — see
+`docs/findings.md` for the full write-up and `docs/context.md` for current state.
