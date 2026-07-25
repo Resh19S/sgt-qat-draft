@@ -392,3 +392,30 @@ runtime instances comparable. Documented this clearly rather than pretend the
 result files (`no_spec_decode_2026-07-24T17-39-17...`,
 `baseline_eagle3_2026-07-24T17-44-02...`) from the pasted `BenchResult` reprs,
 same as before.
+
+Ran a full doc/commit audit while notebook 04 was running in the background
+(user's request, "cross check docs and commits theyre upto progress"). Findings:
+git working tree clean, origin only 1 commit behind (caught up after this
+session's push), every `results/` file findings.md references actually exists,
+all notebooks valid JSON, no leftover duplicate headers. Two real staleness
+issues found and fixed: `README.md`'s Status section still said "Phase 1 in
+progress" (we're Phase 3 done / Phase 4 in progress), and `CLAUDE.md` still said
+"no GitHub remote configured" (one's been set up since near the start —
+`origin` → `Resh19S/sgt-qat-draft`).
+
+## 2026-07-25
+
+Notebook 04 ran. Real number: compressed checkpoint's standalone VRAM footprint
+= 1.629 GiB. `plain_checkpoint_delta_bytes` came back `null` as expected — the
+plain checkpoint only ever lived on notebook 03's local Colab disk, never backed
+up to Drive, so this different session's fallback logic correctly skipped it
+rather than erroring.
+
+Noticed something worth flagging honestly rather than glossing over: even this
+standalone, no-KV-cache, best-case number (1.629 GiB) is already bigger than
+EAGLE-3's *entire* in-vLLM memory delta (1.047 GiB, from the matched-session
+run) — which itself includes KV cache and serving overhead the SGT-QAT number
+doesn't. Not a fair comparison as constructed, but real evidence against
+assuming "if only vLLM supported compressed drafters, SGT-QAT would obviously
+win on memory too." Wrote this up plainly in findings.md rather than let the
+quality-win narrative imply a memory win that isn't demonstrated.

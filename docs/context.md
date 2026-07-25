@@ -5,11 +5,29 @@ real progress, so a cold session can pick up without re-deriving anything.
 
 ## Current phase
 
-Phase 3 done, Phase 4 (packaging) in progress. Notebooks 01, 02, and 03 have all
-run successfully with real numbers, fully written up in `docs/findings.md`,
-**speed/acceptance comparison confirmed airtight (2026-07-24)**. Notebook 04
-(standalone compressed-checkpoint memory measurement) is written, not yet run —
-memory is intentionally deferred (see below).
+Phase 3 done, Phase 4 (packaging) in progress. Notebooks 01-04 have all run
+successfully with real numbers, fully written up in `docs/findings.md`. Speed and
+acceptance-rate comparisons are airtight; memory has a real number now
+(2026-07-25) but not a clean apples-to-apples one — see below.
+
+## Notebook 04 — RUN, real number (2026-07-25)
+
+Standalone VRAM footprint of the genuinely compressed checkpoint (no vLLM, no
+decompression): **1.629 GiB**. Notable: this is *already bigger* than EAGLE-3's
+full in-vLLM memory delta (1.047 GiB, weights + its own KV cache + serving
+overhead) — even excluding KV cache/serving overhead that would only make the
+SGT-QAT number larger still. Not apples-to-apples (standalone weights vs. full
+serving), so not proof compression can't compete on memory, but a real signal
+against assuming compression alone would have made SGT-QAT competitive on
+memory even if vLLM supported loading it. Full write-up in `docs/findings.md`
+2026-07-25 entry.
+
+`plain_checkpoint_delta_bytes` came back `null` — the plain/decompressed
+checkpoint from notebook 03 only ever existed on that session's local Colab
+disk, never backed up to Drive, so this different session couldn't find it.
+Would need a fresh decompression run or a Drive backup to get a real
+same-methodology plain-vs-compressed number instead of extrapolating from disk
+size.
 
 ## Notebook 03 — RUN, real numbers (2026-07-24)
 
@@ -265,11 +283,9 @@ did successfully go through git — only the checkpoint binary itself goes via D
 
 1. ~~Fix the `max_model_len` mismatch~~ — **done 2026-07-24**, speed/acceptance
    comparison confirmed airtight (see above).
-2. Run `notebooks/04_compressed_checkpoint_memory.ipynb` — standalone VRAM
-   measurement for the genuinely compressed checkpoint, deliberately
-   session-independent (see above). Transcribe results into `docs/findings.md`
-   alongside the notebook 03 entry once done. Memory otherwise stays deprioritized
-   per user's explicit call.
+2. ~~Run `notebooks/04_compressed_checkpoint_memory.ipynb`~~ — **done 2026-07-25**,
+   real number (1.629 GiB), written up in findings.md. Memory story now has real
+   data but isn't a clean win either way — stays noted as non-apples-to-apples.
 3. Swap placeholder prompts (3 sentences cycled to fill 80 slots) for a real
    benchmark dataset (e.g. mt-bench, matching `spec_decode_offline.py`'s own
    convention) across notebooks 02 and 03, and re-run both for final numbers.

@@ -262,6 +262,51 @@ Colab session/VM instance than the SGT-QAT run (see caveats on GPU memory).
 `results/baseline_eagle3_2026-07-23T18-46-18...json`) is superseded for this
 comparison but kept for the record.
 
+## 2026-07-25 — Standalone memory footprint: compressed SGT-QAT checkpoint
+
+**Method**: `notebooks/04_compressed_checkpoint_memory.ipynb`. Loads
+`checkpoints/qwen3-1.7b-sgt-qat/` (the genuinely compressed 1.18GB checkpoint —
+the one vLLM's `draft_model` path can't load, see the 2026-07-24 finding above)
+directly via `transformers.AutoModelForCausalLM.from_pretrained()`, deliberately
+**without** decompressing, and reads `nvidia-smi` GPU memory before/after. No
+vLLM, no target model, no KV cache, no speculative decoding — a standalone
+weight-only measurement, session-independent by design (unlike the notebook
+02/03 numbers, this doesn't depend on comparing absolute readings across
+different Colab runtime instances for its own internal validity).
+
+**Metric**: compressed checkpoint's own VRAM footprint: **1.629 GiB**
+(1,749,024,768 bytes).
+
+**Context, not a direct comparison**: EAGLE-3's full in-vLLM memory delta
+(weights + its own KV cache + serving overhead, from the `max_model_len=4096`-matched
+run) was **1.047 GiB**. The compressed SGT-QAT drafter's standalone weight-only
+footprint is *already larger* than that — despite excluding KV cache/serving
+overhead that would only add more. **Not an apples-to-apples comparison** (one
+is standalone weights, the other is full serving), so this isn't proof SGT-QAT
+loses on memory even when compressed — but it's a real, informative signal:
+compression narrows the gap against the plain checkpoint (1.629 GiB vs. an
+extrapolated ~4-5 GiB the plain ~3.4GB checkpoint would likely need standalone,
+not measured this run), but doesn't obviously make a full 1.7B dense drafter
+competitive with a purpose-built lightweight EAGLE-3-style head on memory alone.
+Worth stating plainly in the paper rather than assuming compression would have
+been a clean win if only vLLM supported it.
+
+**Caveats / threats to validity**:
+- **Plain checkpoint comparison point is missing** (`plain_checkpoint_delta_bytes:
+  null` in the raw data) — the plain/decompressed checkpoint from notebook 03
+  only ever existed on that session's local Colab disk, never backed up to
+  Drive, so this (different) session couldn't find it to load. Would need
+  either a fresh decompression run or a Drive backup of the plain checkpoint to
+  fill this in with a real, same-methodology number instead of an extrapolation.
+- Not comparable to notebook 02/03's `gpu_memory_used_bytes` numbers directly —
+  different measurement context (standalone load vs. full vLLM serving) as well
+  as the cross-session absolute-reading caveat already noted for those.
+- Still doesn't answer the question that actually matters for the paper (would
+  a genuinely compressed drafter be fast *and* memory-efficient inside vLLM) —
+  that remains blocked on vLLM gaining compressed-tensors draft-model support.
+
+**Raw data**: `results/compressed_checkpoint_memory_2026-07-25T07-50-21.json`
+
 ## Template for future entries
 
 ### [Date] — [Experiment name]
