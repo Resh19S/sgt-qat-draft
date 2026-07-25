@@ -355,6 +355,139 @@ carry that caveat.
 **Raw data**: `results/no_spec_decode_2026-07-25T08-22-23.566257+00-00.json`,
 `results/baseline_eagle3_2026-07-25T08-26-34.711075+00-00.json`
 
+## 2026-07-25 — Real-prompt SGT-QAT drafter run: full 3-way comparison (supersedes placeholder-prompt Phase 3)
+
+**Method**: `notebooks/03_sgt_qat_drafter_bench.ipynb`, re-run with real mt-bench
+prompts (same `bench_utils.load_benchmark_prompts()` set as notebook 02's
+real-prompt re-run above — same `target_model`/`num_prompts`, so the exact same
+80 prompts). Drafter is the **plain/decompressed** checkpoint
+(`checkpoints/qwen3-1.7b-sgt-qat-plain`, ~3.4GB fp16), not the genuinely
+compressed one — unchanged from the 2026-07-24 finding (vLLM's `draft_model`
+path can't load compressed-tensors packed weights). `max_model_len=4096`,
+matched to notebook 02.
+
+**Data-integrity note, corrected before transcribing**: the first "Compare"
+cell notebook 03 printed in this session was invalid — its EAGLE-3 row was
+silently pulling the *placeholder-prompt* `baseline_eagle3` result (136.6 tok/s,
+1.78x, mean AL 2.02) instead of the real-prompt one (165.4 tok/s, 2.16x, mean AL
+2.474), because the real-prompt JSON had only been committed locally (not
+pushed to GitHub) before this Colab session's clone/reclone. The table below
+uses the correct real-prompt result for every condition — sourced from the
+`BenchResult` values directly, not notebook 03's own (stale) `summarize()`
+output.
+
+**Metrics** (all real prompts, same 80-prompt mt-bench set, `max_model_len=4096`):
+
+| run | tok/s | speedup | mean acceptance length | GPU memory |
+|---|---|---|---|---|
+| no_spec_decode | 76.6 | 1.00x | — | 36.75 GiB |
+| baseline_eagle3 | 165.4 | 2.16x | 2.474 | 37.80 GiB |
+| sgt_qat_drafter | 32.9 | **0.43x** | 2.443 | 37.27 GiB |
+
+Per-position acceptance rate (SGT-QAT): [0.668, 0.456, 0.319] for speculative
+positions 1-3 (EAGLE-3 for comparison: [0.714, 0.465, 0.296]).
+
+**Headline finding**: acceptance quality is close between the two drafters on
+real prompts (mean AL 2.443 vs. 2.474 — not the win the placeholder-prompt
+numbers suggested, 2.488 vs. 2.023, but not a loss either — effectively a
+wash). **Wall-clock speed is where SGT-QAT loses decisively**: 0.43x is an
+actual *regression* versus not using speculative decoding at all. The
+per-step cost of running a full 28-layer dense 1.7B model as the drafter
+outweighs whatever tokens its (perfectly competent) acceptance rate saves.
+This is a structural/architectural result, not a quantization-quality
+result — EAGLE-3's speed advantage comes from being a tiny 1-2 layer head
+sharing the target's embeddings, a design quantization alone cannot
+replicate on a full dense model. See the aggressive-quantization entry below
+for whether pushing bits down further changes this story (short answer: it
+helps memory, not this).
+
+**Caveats / threats to validity**:
+- Drafter is decompressed/plain (~3.4GB fp16), not the genuinely compressed
+  checkpoint — same caveat as the 2026-07-24 finding. The speed number here is
+  actually a *best case* for SGT-QAT-as-drafter in one sense (no on-the-fly
+  dequantization overhead) and unmeasured in another (a real packed/quantized
+  kernel path might reduce memory-bandwidth cost during decode) — this
+  benchmark cannot distinguish those.
+- GPU memory: `no_spec_decode`/`baseline_eagle3` were measured back-to-back in
+  one session (notebook 02's real-prompt run); `sgt_qat_drafter` was measured
+  in a different session (notebook 03, after the mid-run Colab corruption and
+  re-clone) — cross-session absolute `nvidia-smi` readings carry the usual
+  caveat, so don't over-read small differences in the memory column.
+- Same real-prompt set as notebook 02 by construction (shared loader,
+  identical `target_model`/`num_prompts`), so the comparison itself is valid
+  even though memory readings aren't perfectly cross-session-comparable.
+
+**Raw data**: `results/sgt_qat_drafter_2026-07-25T09-08-02.978080+00-00.json`
+(SGT-QAT drafter, real prompts), cross-referenced against
+`results/no_spec_decode_2026-07-25T08-22-23.566257+00-00.json` and
+`results/baseline_eagle3_2026-07-25T08-26-34.711075+00-00.json` (notebook 02,
+same real-prompt set) rather than notebook 03's own stale `summarize()` output.
+
+## 2026-07-25 — Aggressive quantization tradeoff: does pushing bits down close the memory gap?
+
+**Method**: `notebooks/05_aggressive_quant_tradeoff.ipynb`. Same recipe as
+notebook 01 (sensitivity-ranked mixed-precision GPTQ + targeted QAT on the
+lower-bit layers), shifted down one bit-width tier: protected layers at **W3**
+(was W4), rest at **W2** (was W3) — actual average **2.158 bits/weight**
+(`protect_frac_actual=0.1577`, 55 layers protected / 141 rest), vs. the
+flagship's 3.156 bits/weight. Same seed (42), same hyperparameters
+(`TRAIN_STEPS=500`, `LR=1e-5`, `BATCH_TOKENS=1024`, fp32 QAT precision) as
+notebook 01, for direct comparability. Quality assessed via WikiText-2 PPL
+(same methodology as notebook 01); no vLLM/8B-target/acceptance-rate run —
+deliberately cheap, 1.7B-only.
+
+**Metrics**:
+
+| | Stage 1 only PPL | Stage 1+2 (QAT) PPL | Standalone VRAM |
+|---|---|---|---|
+| Notebook 01 flagship (W4/W3, 3.156 bits/weight) | 22.37 | 15.91 | 1.629 GiB |
+| Notebook 05 aggressive (W3/W2, 2.158 bits/weight) | 454.31 | 188.66 | 0.646 GiB |
+
+Reference points: EAGLE-3's full in-vLLM memory delta is 1.047 GiB (from
+notebook 02's real-prompt run, see above); notebook 04's flagship standalone
+number is 1.629 GiB.
+
+**This directly answers the question the notebook was written for**: yes,
+pushing bit-width down does close (and pass) the memory gap against EAGLE-3 —
+0.646 GiB standalone is genuinely *smaller* than EAGLE-3's 1.047 GiB full
+in-vLLM delta, despite the usual standalone-vs-full-serving caveat only cutting
+against this comparison (a full in-vLLM measurement of this aggressive
+checkpoint would add KV cache/serving overhead on top of 0.646 GiB, so the true
+number would be somewhat higher — but there's real headroom here). **But
+quality collapses catastrophically getting there**: Stage 1+2 PPL of 188.66 is
+roughly **12x worse** than the flagship's 15.91, and QAT fine-tuning (which
+recovered the flagship from 22.37 → 15.91, a real and meaningful correction)
+only partially rescues this run (454.31 → 188.66) — nowhere near making 2-bit
+quantization viable at this model size/recipe. This is the "we might quantize
+too hard and break acceptance rate completely" outcome flagged as possible
+before this notebook was written, now confirmed with real data rather than
+speculation: **a memory win over EAGLE-3 is achievable, but not without
+destroying the quality this whole drafter approach depends on.**
+
+**Secondary observation**: on-disk checkpoint size only shrank modestly
+(993.6 MB vs. notebook 01's 1184.8 MB, ~16% smaller) despite the average
+bits/weight dropping ~32% (3.156 → 2.158) — group-size/scale/zero-point
+storage overhead doesn't scale down proportionally with bit-width at
+`group_size=128`, worth keeping in mind if a future run tries to quantify
+"expected" checkpoint size from bits/weight alone.
+
+**Caveats / threats to validity**:
+- No acceptance-rate/vLLM measurement at this bit-width — the PPL collapse
+  strongly suggests acceptance rate would collapse too (a 12x worse PPL model
+  is a much worse next-token predictor), but this is inferred, not measured.
+  Given the PPL result, actually running the expensive 8B-target vLLM
+  benchmark for this checkpoint isn't a good use of compute — the quality
+  signal alone is disqualifying.
+- Standalone memory (no vLLM, no KV cache, no target model) vs. EAGLE-3's full
+  in-vLLM delta is not apples-to-apples, as with notebook 04's flagship
+  comparison — stated plainly above rather than implying an unqualified win.
+- Single seed (42), single run — no replication check on whether 2-bit
+  training instability (non-finite loss) would occur on a different seed;
+  this run happened to converge (no `RuntimeError` raised), but that's not
+  guaranteed to generalize.
+
+**Raw data**: `results/aggressive_quant_tradeoff_seed42_2026-07-25T09-51-46.json`
+
 ## Template for future entries
 
 ### [Date] — [Experiment name]

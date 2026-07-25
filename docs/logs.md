@@ -507,3 +507,56 @@ real-prompt run is still pending -- user needs to restore the checkpoint
 backup in their live session and re-run from "Run: SGT-QAT drafter" onward.
 Notebook 05 (aggressive quant tradeoff) is still running in parallel, results
 not yet in.
+
+Notebook 03 hit one more snag after the reclone: `ModuleNotFoundError:
+bench_utils` again, despite `%cd /content/sgt-qat-draft` confirming correct
+cwd and `ls notebooks/common/` confirming the file genuinely existed on disk.
+Diagnosed as a stale `sys.path_importer_cache` entry from an earlier
+in-session failed import attempt (the same kernel had tried and failed to
+import from that path before the directory was in its final state) --
+`importlib.invalidate_caches()` is the standard fix for exactly this. Didn't
+get final confirmation this specific fix worked, but the notebook did go on
+to produce a real result shortly after, so it's presumed resolved.
+
+Notebook 03's real-prompt SGT-QAT-drafter run landed:
+`sgt_qat_drafter_2026-07-25T09-08-02...json`. First "Compare" cell output the
+notebook itself printed was WRONG though -- its EAGLE-3 row silently pulled
+the old placeholder-prompt result (136.6 tok/s, 1.78x, mean AL 2.02) instead
+of the real one (165.4 tok/s, 2.16x, mean AL 2.474), because the real-prompt
+EAGLE-3 JSON had only been committed locally in this Claude session, never
+pushed to GitHub -- and this Colab session's `results/` dir came entirely
+from a fresh clone (git wipe-and-reclone during the earlier debugging saga
+had already erased whatever notebook 02 originally saved locally in that
+session). Caught this before transcribing anything -- corrected the
+comparison by hand using the actually-real `BenchResult` values instead of
+trusting the notebook's own (stale) `summarize()` output. Real headline:
+mean acceptance length is close between the two drafters (2.443 vs. 2.474,
+basically a wash on quality) but SGT-QAT-as-drafter is an actual wall-clock
+*regression* vs. no speculation at all (0.43x) -- a full dense 1.7B model's
+per-step drafting cost outweighs whatever its (perfectly competent)
+acceptance rate saves. This is architectural, not a quantization-quality
+problem: EAGLE-3's speed comes from being a tiny few-layer head sharing the
+target's embeddings, which quantizing a dense model can't replicate. Wrote
+this up in findings.md as a real, if unflattering, Phase 3 result, and saved
+a memory note about a possible future "Project Y" (build an EAGLE-style
+architecture and QAT *that*) -- explicitly out of scope for this project,
+just flagged for later.
+
+Notebook 05 (aggressive quantization tradeoff) landed too:
+`aggressive_quant_tradeoff_seed42_2026-07-25T09-51-46.json`. Clean answer to
+the question it was written for -- pushing to ~2.16 bits/weight (W3
+protected / W2 rest) DOES get standalone memory under EAGLE-3's number
+(0.646 GiB vs. 1.047 GiB), but perplexity collapses getting there: 188.66
+combined PPL vs. the flagship's 15.91, roughly 12x worse, even after QAT
+fine-tuning (which helped, 454.31 -> 188.66, but nowhere near enough). Confirms
+the "we might win we might lose" framing from earlier this session was the
+right call rather than assuming a match/beat outcome -- the actual answer is
+"a memory win is achievable, but not without breaking the quality the whole
+approach depends on." Didn't bother running the expensive 8B-target vLLM
+acceptance-rate benchmark at this bit-width -- the PPL result alone is
+disqualifying, not worth the compute to confirm what's already clear.
+
+Wrote up both as findings.md entries (real-prompt 3-way SGT-QAT comparison,
+and the aggressive-quant tradeoff), created the two missing results/ JSON
+files from the pasted data (they existed on the user's Colab/Drive but not
+in this local repo checkout).

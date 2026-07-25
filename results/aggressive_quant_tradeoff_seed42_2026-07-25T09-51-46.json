@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-07-25T09:51:46.875423+00:00",
+  "experiment": "aggressive_quant_tradeoff",
+  "model": "Qwen/Qwen3-1.7B",
+  "calib_seed": 42,
+  "protect_frac_target": 0.15,
+  "protect_frac_actual": 0.1577,
+  "protected_bits": 3,
+  "rest_bits": 2,
+  "avg_bits_per_weight": 2.158,
+  "n_layers_protected": 55,
+  "n_layers_rest": 141,
+  "ppl_stage1_only": 454.31275937137025,
+  "ppl_combined": 188.66448148147936,
+  "notebook_01_reference": {
+    "avg_bits_per_weight": 3.1562,
+    "ppl_stage1_only": 22.37,
+    "ppl_combined": 15.91,
+    "compressed_standalone_memory_gib": 1.629
+  },
+  "checkpoint_size_mb": 993.6,
+  "standalone_memory_delta_bytes": 694157312,
+  "standalone_memory_delta_gib": 0.646,
+  "eagle3_reference_memory_gib": 1.047,
+  "n_trainable_params_stage2": 1186988032,
+  "qat_steps": 500,
+  "qat_lr": 1e-05,
+  "qat_precision": "fp32",
+  "gpu": "NVIDIA A100-SXM4-40GB"
+}

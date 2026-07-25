@@ -340,30 +340,43 @@ did successfully go through git — only the checkpoint binary itself goes via D
 2. ~~Run `notebooks/04_compressed_checkpoint_memory.ipynb`~~ — **done 2026-07-25**,
    real number (1.629 GiB), written up in findings.md. Memory story now has real
    data but isn't a clean win either way — stays noted as non-apples-to-apples.
-3. ~~Swap placeholder prompts~~ — **code done 2026-07-25**
-   (`bench_utils.load_benchmark_prompts`, mt-bench). **Notebook 02: done and
-   transcribed 2026-07-25** — real numbers are a materially better EAGLE-3
-   baseline than placeholder text showed (2.16x speedup, was 1.78x; mean
-   acceptance length 2.474, was 2.023 — see findings.md "Real-prompt baseline
-   re-run"). **Notebook 03: still pending.** Mid-run it hit a Colab
-   session/environment corruption saga (wrong cwd → incomplete clone → a
-   deleted-cwd bug → GitHub anonymous-clone auth failure — full chain in
-   `docs/logs.md` 2026-07-25) which is now resolved: the repo re-cloned
-   successfully with a `GITHUB_TOKEN`-authenticated URL. User still needs to
-   restore the checkpoint backup in that live session and re-run from the
-   "Run: SGT-QAT drafter" cell onward — no need to redo anything expensive.
-   **All five notebooks' Setup cells (01-05) were proactively updated to clone
-   with `GITHUB_TOKEN` by default**, since they all had the same token-less
-   `git clone` pattern that caused notebook 03's auth failure and would have
-   hit it eventually too.
-4. **Notebook 05** (aggressive quantization tradeoff) — written, running in
-   parallel with #3, **not yet landed**. Once it lands: transcribe into
-   findings.md, whatever the answer turns out to be (quality survives and
-   memory improves; quality survives but memory doesn't improve enough;
-   quality breaks first — all three are valid, reportable outcomes).
-5. `docs/findings.md` already has solid methods for all conditions — once
-   notebook 03's real-prompt SGT-QAT-drafter run and #4 land with real
-   numbers, `docs/paper-draft.md` can start drawing directly from it.
+3. ~~Swap placeholder prompts~~ — **fully done 2026-07-25**
+   (`bench_utils.load_benchmark_prompts`, mt-bench), both notebooks 02 and 03
+   run and transcribed. Notebook 02: EAGLE-3 baseline materially better with
+   real prompts (2.16x speedup, was 1.78x; mean AL 2.474, was 2.023).
+   Notebook 03 (SGT-QAT drafter, real prompts): mean AL 2.443 — close to
+   EAGLE-3's, basically a wash on acceptance quality — but speedup is
+   **0.43x, an actual regression** vs. no speculation at all. Headline: full
+   dense 1.7B drafting cost outweighs its (competent) acceptance rate; this
+   is architectural (EAGLE-3's tiny shared-embedding head vs. a 28-layer
+   dense model), not something quantization quality fixes. See findings.md
+   "Real-prompt SGT-QAT drafter run: full 3-way comparison". Note: notebook
+   03's own printed comparison table was initially wrong (pulled a stale
+   placeholder-prompt EAGLE-3 result because the real one hadn't been pushed
+   to GitHub before that session's reclone) — corrected by hand before
+   transcribing; see `docs/logs.md` 2026-07-25 for the full mechanism.
+   Mid-run, notebook 03 also hit a Colab session/environment corruption saga
+   (wrong cwd → incomplete clone → a deleted-cwd bug → GitHub anonymous-clone
+   auth failure → a stale `sys.path_importer_cache` entry) — full chain in
+   `docs/logs.md` 2026-07-25, now resolved. **All five notebooks' Setup cells
+   (01-05) were proactively updated to clone with `GITHUB_TOKEN` by default**
+   as a result.
+4. ~~Notebook 05~~ (aggressive quantization tradeoff) — **done 2026-07-25**.
+   Clean answer: pushing to ~2.16 bits/weight (W3 protected/W2 rest) gets
+   standalone memory under EAGLE-3's number (0.646 GiB vs. 1.047 GiB), but
+   perplexity collapses getting there (188.66 combined PPL vs. the flagship's
+   15.91, ~12x worse, even after QAT fine-tuning). A memory win over EAGLE-3
+   is achievable, but not without breaking the quality the drafter approach
+   depends on. Didn't run the expensive 8B/vLLM acceptance-rate check at this
+   bit-width — the PPL collapse alone is disqualifying. See findings.md
+   "Aggressive quantization tradeoff".
+5. **All Phase 3 experiments are now landed with real data.** `docs/findings.md`
+   has methods + numbers for every condition (no-spec / EAGLE-3 / SGT-QAT
+   drafter, plus the aggressive-quant memory/quality tradeoff). Next real step
+   is Phase 4 packaging: decide the paper's honest framing (quality-parity +
+   architectural-cost story, not an EAGLE-parity chase — see the user's
+   2026-07-25 discussion and the deferred "Project Y" idea in memory) and
+   start drafting `docs/paper-draft.md` from what's already written up.
 
 ## Workflow note (2026-07-23)
 
