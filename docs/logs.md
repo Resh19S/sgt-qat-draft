@@ -456,3 +456,54 @@ wrong, consistent with the project's established "fail loud, don't silently
 degrade" pattern. Wired into both notebooks 02 and 03's config cells,
 replacing the placeholder text. User will run 02 then 03 in sequence while
 notebook 05 runs in parallel.
+
+Notebook 02 ran successfully with real prompts. Results were a real surprise:
+EAGLE-3 speedup went from 1.78x (placeholder text) to **2.16x**, mean
+acceptance length from 2.023 to **2.474**. Placeholder smoke-test strings were
+apparently harder for EAGLE-3 to draft well on than realistic mt-bench prompts
+-- the earlier baseline understated EAGLE-3. GPU memory delta between
+conditions came back byte-identical to the earlier placeholder-prompt run
+(1.047 GiB both times), confirming memory is driven by weights + KV cache
+sizing, not prompt content, as expected. Wrote this up in findings.md.
+
+Notebook 03 then hit a real debugging saga -- not a code bug in the usual
+sense, a Colab session/environment corruption chain:
+1. `ModuleNotFoundError: No module named 'bench_utils'` -- diagnosed via
+   `!pwd`/`!ls`/`!git log` that cwd was `/content`, not `/content/sgt-qat-draft`
+   (a runtime restart had reset cwd and the Setup cell wasn't re-run first).
+2. Recovery attempt found the clone directory existed but was **incomplete**
+   (`bench_utils.py present: False`) -- likely an earlier `os.system('git
+   clone...')` that failed silently, since `os.system` doesn't raise on
+   nonzero exit.
+3. Gave a `subprocess.run(..., check=True)` wipe-and-reclone cell to force a
+   loud failure instead of a silent one. It raised `CalledProcessError: exit
+   status 128` -- real, but the actual git stderr wasn't visible in Colab's
+   default output.
+4. Requested `capture_output=True, text=True` to surface git's own stderr:
+   `fatal: Unable to read current working directory: No such file or
+   directory`. Root cause was **my own bug** -- the previous cell had
+   `os.chdir()`'d into the repo dir, then this cell called
+   `shutil.rmtree()` on that same directory while it was still the process's
+   cwd (the classic Linux deleted-cwd issue, which breaks all subsequent
+   subprocess calls regardless of target). Fixed by `os.chdir('/content')`
+   before the `rmtree`.
+5. That produced a *different*, real error: `fatal: could not read Username
+   for 'https://github.com': No such device or address` -- anonymous clone
+   auth/rate-limit failure, likely from Colab's shared IPs after many clone
+   attempts that day.
+6. Fixed by cloning with the user's existing `GITHUB_TOKEN` Colab secret
+   embedded in the URL (`https://{token}@github.com/...`), the same pattern
+   already used elsewhere in this project for pushing. Confirmed working:
+   `bench_utils.py present: True`, `cwd: /content/sgt-qat-draft`.
+
+Applied the token-based clone fix proactively to **all five** notebooks'
+Setup cells (01-05), not just 03 -- they all had the same plain, token-less
+`git clone` pattern and would eventually hit the same auth failure. Validated
+all five are still valid JSON after the edits.
+
+Wrote up the real-prompt no-spec/EAGLE-3 results in findings.md (2026-07-25
+entry, "Real-prompt baseline re-run"). Notebook 03's actual SGT-QAT-drafter
+real-prompt run is still pending -- user needs to restore the checkpoint
+backup in their live session and re-run from "Run: SGT-QAT drafter" onward.
+Notebook 05 (aggressive quant tradeoff) is still running in parallel, results
+not yet in.

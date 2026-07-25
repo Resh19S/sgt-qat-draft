@@ -341,18 +341,29 @@ did successfully go through git — only the checkpoint binary itself goes via D
    real number (1.629 GiB), written up in findings.md. Memory story now has real
    data but isn't a clean win either way — stays noted as non-apples-to-apples.
 3. ~~Swap placeholder prompts~~ — **code done 2026-07-25**
-   (`bench_utils.load_benchmark_prompts`, mt-bench), **not yet run**. User running
-   notebook 02 then notebook 03 in sequence. Once both land: transcribe the new
-   numbers into `docs/findings.md`, superseding the placeholder-prompt entries
-   (keep them for the record, don't delete).
-4. **Notebook 05** (aggressive quantization tradeoff) — written, not yet run,
-   running in parallel with #3. Once it lands: transcribe into findings.md,
-   whatever the answer turns out to be (quality survives and memory improves;
-   quality survives but memory doesn't improve enough; quality breaks first —
-   all three are valid, reportable outcomes).
-5. `docs/findings.md` already has solid methods for all conditions — once #3
-   and #4 land with real numbers, `docs/paper-draft.md` can start drawing
-   directly from it.
+   (`bench_utils.load_benchmark_prompts`, mt-bench). **Notebook 02: done and
+   transcribed 2026-07-25** — real numbers are a materially better EAGLE-3
+   baseline than placeholder text showed (2.16x speedup, was 1.78x; mean
+   acceptance length 2.474, was 2.023 — see findings.md "Real-prompt baseline
+   re-run"). **Notebook 03: still pending.** Mid-run it hit a Colab
+   session/environment corruption saga (wrong cwd → incomplete clone → a
+   deleted-cwd bug → GitHub anonymous-clone auth failure — full chain in
+   `docs/logs.md` 2026-07-25) which is now resolved: the repo re-cloned
+   successfully with a `GITHUB_TOKEN`-authenticated URL. User still needs to
+   restore the checkpoint backup in that live session and re-run from the
+   "Run: SGT-QAT drafter" cell onward — no need to redo anything expensive.
+   **All five notebooks' Setup cells (01-05) were proactively updated to clone
+   with `GITHUB_TOKEN` by default**, since they all had the same token-less
+   `git clone` pattern that caused notebook 03's auth failure and would have
+   hit it eventually too.
+4. **Notebook 05** (aggressive quantization tradeoff) — written, running in
+   parallel with #3, **not yet landed**. Once it lands: transcribe into
+   findings.md, whatever the answer turns out to be (quality survives and
+   memory improves; quality survives but memory doesn't improve enough;
+   quality breaks first — all three are valid, reportable outcomes).
+5. `docs/findings.md` already has solid methods for all conditions — once
+   notebook 03's real-prompt SGT-QAT-drafter run and #4 land with real
+   numbers, `docs/paper-draft.md` can start drawing directly from it.
 
 ## Workflow note (2026-07-23)
 
@@ -371,8 +382,9 @@ and committed locally 2026-07-24, still needs to reach GitHub too.
   or was specific to this A100 run — flagged in findings.md, not yet re-checked.
 - Exact vLLM version/commit to pin for reproducibility — deliberately deferred
   (plain `pip install vllm` used for notebook 02), revisit if it matters later.
-- Prompts are placeholder smoke-test text throughout — a real benchmark dataset
-  is needed before any of these numbers are final/paper-ready (see Next step #3).
+- Prompts are real (mt-bench) for notebooks 02's no-spec/EAGLE-3 baseline as of
+  2026-07-25; notebook 03's SGT-QAT-drafter run still needs to complete with
+  real prompts before the 3-way comparison is final/paper-ready (see Next step #3).
 - Memory comparison remains open (cross-session absolute-reading issue, not
   `max_model_len` anymore) — deliberately deprioritized, see Next step #2.
 - Whether SGT-QAT's higher acceptance rate (2.488 vs. EAGLE-3's 2.023) would

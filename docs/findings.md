@@ -307,6 +307,54 @@ been a clean win if only vLLM supported it.
 
 **Raw data**: `results/compressed_checkpoint_memory_2026-07-25T07-50-21.json`
 
+## 2026-07-25 — Real-prompt baseline re-run: no-spec vs. EAGLE-3 (supersedes placeholder-prompt numbers)
+
+**Method**: `notebooks/02_baseline_eagle3.ipynb`, re-run with real mt-bench prompts
+(`philschmid/mt-bench` via `bench_utils.load_benchmark_prompts()`, which wraps
+vLLM's own `vllm.benchmarks.datasets` dataset utilities — the same convention as
+`spec_decode_offline.py --test`), replacing the placeholder smoke-test text used
+in every prior run. Same harness/methodology otherwise as the 2026-07-24
+`max_model_len=4096`-matched entry above: target `Qwen/Qwen3-8B`,
+`num_speculative_tokens=3`, 80 prompts, 256 max tokens, low-concurrency
+(sequential single-request) benchmarking, `max_model_len=4096`.
+
+**Metrics**:
+
+| run | tok/s | speedup | mean acceptance length | GPU memory |
+|---|---|---|---|---|
+| no_spec_decode | 76.6 | 1.00x | — | 36.75 GiB (39,460,012,032 B) |
+| baseline_eagle3 | 165.4 | **2.16x** | **2.474** | 37.80 GiB (40,584,085,504 B) |
+
+Per-position acceptance rate (EAGLE-3): [0.714, 0.465, 0.296] for speculative
+positions 1-3.
+
+**This materially changes the EAGLE-3 baseline** versus the placeholder-prompt
+run logged 2026-07-24: speedup went from 1.78x → **2.16x**, and mean acceptance
+length from 2.023 → **2.474**. Placeholder text (short, repetitive smoke-test
+strings) apparently made EAGLE-3's draft harder to accept than it is on
+realistic conversational prompts — the earlier placeholder-prompt numbers
+understated EAGLE-3's real performance. Any Phase 3 SGT-QAT-drafter comparison
+against this baseline must also use real prompts (notebook 03, in progress) or
+the two won't be comparable.
+
+**Memory note**: the GPU memory delta between conditions
+(40,584,085,504 − 39,460,012,032 = 1,124,073,472 B ≈ **1.047 GiB**) is *identical*
+to the delta measured in the placeholder-prompt, `max_model_len`-matched
+2026-07-24 run. Confirms memory usage in this harness is driven by model
+weights + KV cache sizing (`max_model_len`), not prompt content — expected, but
+good to have confirmed with real data rather than assumed.
+
+**Caveats / threats to validity**: same as the 2026-07-24 entry above (GPU
+memory is an absolute whole-device `nvidia-smi` reading; not guaranteed
+comparable across different Colab VM instances if a future run isn't
+back-to-back with this one). This run's two conditions were measured
+back-to-back in the same session, so the memory delta between *them* is valid;
+cross-session comparisons (e.g. against notebook 04's standalone numbers) still
+carry that caveat.
+
+**Raw data**: `results/no_spec_decode_2026-07-25T08-22-23.566257+00-00.json`,
+`results/baseline_eagle3_2026-07-25T08-26-34.711075+00-00.json`
+
 ## Template for future entries
 
 ### [Date] — [Experiment name]
