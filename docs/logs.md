@@ -419,3 +419,40 @@ doesn't. Not a fair comparison as constructed, but real evidence against
 assuming "if only vLLM supported compressed drafters, SGT-QAT would obviously
 win on memory too." Wrote this up plainly in findings.md rather than let the
 quality-win narrative imply a memory win that isn't demonstrated.
+
+User asked whether we could theoretically push quantization further to close
+the memory gap, and whether the paper could be framed as "SGT-QAT would
+match/beat EAGLE-3 if only vLLM supported it." Did the bits-per-weight math:
+current checkpoint averages 3.156 bits/weight at 1.629 GiB; getting to ~2
+bits/weight would arithmetically land around 1.03 GiB, close to EAGLE-3's 1.047
+GiB. But pushed back on the framing -- we have zero data below W3/W4, quality
+could collapse well before reaching that bit-width, and there's a structural
+difference (EAGLE-3 is small by architecture, reusing target embeddings; our
+drafter is a fully independent 1.7B model) that quantization alone can't erase.
+Recommended: don't write it as an implied conditional win, actually test it.
+
+User agreed and asked for two things in parallel: (1) a new notebook to
+actually test the aggressive-quantization hypothesis instead of leaving it as
+math, and (2) finalize notebooks 02/03 with real prompts (mt-bench) instead of
+the placeholder text everything so far was built on.
+
+Wrote `notebooks/05_aggressive_quant_tradeoff.ipynb`: same recipe as notebook
+01, shifted down one bit-width tier (protected W4->W3, rest W3->W2, ~2.15
+bits/weight average). Deliberately kept cheap -- no 8B target, no vLLM, just
+the 1.7B model (same cost class as notebook 01, chosen specifically so this
+"wouldn't hurt compute balance" per the user's framing) -- uses WikiText-2 PPL
+as a quality proxy instead of a full in-vLLM acceptance-rate re-run, and
+notebook 04's standalone-memory-measurement pattern for the memory side.
+Explicit non-finite-loss handling flags that a training collapse at 2-bit would
+itself be a valid answer to the question, not a bug to route around. Backs up
+to Drive immediately this time (learned from notebook 01's near-miss).
+
+Added `bench_utils.load_benchmark_prompts()`: loads mt-bench via vLLM's own
+`vllm.benchmarks.datasets.add_dataset_parser`/`get_samples` utilities, the same
+convention `spec_decode_offline.py`'s own `--test` mode uses, reusing vLLM's
+tested dataset-loading code rather than us re-implementing mt-bench parsing
+ourselves. Raises loudly (not a silent fallback) if the prompt count comes back
+wrong, consistent with the project's established "fail loud, don't silently
+degrade" pattern. Wired into both notebooks 02 and 03's config cells,
+replacing the placeholder text. User will run 02 then 03 in sequence while
+notebook 05 runs in parallel.

@@ -5,10 +5,64 @@ real progress, so a cold session can pick up without re-deriving anything.
 
 ## Current phase
 
-Phase 3 done, Phase 4 (packaging) in progress. Notebooks 01-04 have all run
-successfully with real numbers, fully written up in `docs/findings.md`. Speed and
-acceptance-rate comparisons are airtight; memory has a real number now
-(2026-07-25) but not a clean apples-to-apples one — see below.
+Phase 4 (packaging) in progress, with two parallel follow-ups launched
+2026-07-25: (a) real prompts (mt-bench) wired into notebooks 02/03 to replace
+the placeholder text those numbers were built on, and (b) notebook 05, testing
+whether more aggressive quantization narrows the memory gap toward EAGLE-3
+without breaking the acceptance-rate advantage. Neither has been run yet.
+
+## Notebook 05 — WRITTEN, not run (2026-07-25)
+
+Answers the "could we theoretically compress further and match/beat EAGLE-3 on
+memory" question with an actual experiment instead of speculation. Same recipe
+as notebook 01, shifted down one bit-width tier: protected layers W4→W3, rest
+W3→W2 (avg ~2.15 bits/weight vs. notebook 01's 3.156). Deliberately cheap — no
+8B target, no vLLM, just the 1.7B model (same cost class as notebook 01) — uses
+WikiText-2 PPL as a quality proxy rather than a full in-vLLM acceptance-rate
+re-run. Measures standalone VRAM the same way notebook 04 did, for direct
+comparison. Real risk flagged in the notebook itself: 2-bit QAT may just break
+(NaN loss, PPL collapse) — that outcome would itself answer the question
+("no, can't push this far"), not indicate a bug.
+
+**Do not write the paper as if this experiment already confirms SGT-QAT would
+match/beat EAGLE-3 if only vLLM supported compressed drafters** — that's not
+what the current data shows (see notebook 04 below; the flagship compressed
+checkpoint's standalone memory already exceeds EAGLE-3's full in-vLLM number).
+The honest framing is: untested hypothesis, plausible from bits-per-weight
+arithmetic, with a real risk of breaking quality before reaching competitive
+memory. Notebook 05 exists to actually test it, not to manufacture support for
+a predetermined conclusion.
+
+## Notebooks 02/03 — updated for real prompts, not yet re-run (2026-07-25)
+
+Added `bench_utils.load_benchmark_prompts()` (mt-bench via vLLM's own dataset
+utilities, same convention as `spec_decode_offline.py`'s `--test` mode) and
+wired it into both notebooks' config cells, replacing the placeholder text (3
+sentences cycled to 80) all prior findings.md numbers were built on. Raises
+loudly on failure rather than silently falling back to placeholder text again.
+**User will run these in sequence (02 → 03)** while notebook 05 runs in
+parallel for the memory question. All prior 2026-07-23/24 result numbers in
+findings.md are placeholder-prompt results and will be superseded once these
+re-runs land — don't delete them, but don't cite them as final either.
+
+## Notebook 04 — RUN, real number (2026-07-25)
+
+Standalone VRAM footprint of the genuinely compressed checkpoint (no vLLM, no
+decompression): **1.629 GiB**. Notable: this is *already bigger* than EAGLE-3's
+full in-vLLM memory delta (1.047 GiB, weights + its own KV cache + serving
+overhead) — even excluding KV cache/serving overhead that would only make the
+SGT-QAT number larger still. Not apples-to-apples (standalone weights vs. full
+serving), so not proof compression can't compete on memory, but a real signal
+against assuming compression alone would have made SGT-QAT competitive on
+memory even if vLLM supported loading it. Full write-up in `docs/findings.md`
+2026-07-25 entry.
+
+`plain_checkpoint_delta_bytes` came back `null` — the plain/decompressed
+checkpoint from notebook 03 only ever existed on that session's local Colab
+disk, never backed up to Drive, so this different session couldn't find it.
+Would need a fresh decompression run or a Drive backup to get a real
+same-methodology plain-vs-compressed number instead of extrapolating from disk
+size.
 
 ## Notebook 04 — RUN, real number (2026-07-25)
 
@@ -286,13 +340,19 @@ did successfully go through git — only the checkpoint binary itself goes via D
 2. ~~Run `notebooks/04_compressed_checkpoint_memory.ipynb`~~ — **done 2026-07-25**,
    real number (1.629 GiB), written up in findings.md. Memory story now has real
    data but isn't a clean win either way — stays noted as non-apples-to-apples.
-3. Swap placeholder prompts (3 sentences cycled to fill 80 slots) for a real
-   benchmark dataset (e.g. mt-bench, matching `spec_decode_offline.py`'s own
-   convention) across notebooks 02 and 03, and re-run both for final numbers.
-4. `docs/findings.md` already has solid methods + numbers for all three
-   conditions (no-spec, EAGLE-3, SGT-QAT drafter) plus the
-   compressed-checkpoint-incompatibility finding — `docs/paper-draft.md` can start
-   drawing directly from it, once placeholder prompts are resolved (#3).
+3. ~~Swap placeholder prompts~~ — **code done 2026-07-25**
+   (`bench_utils.load_benchmark_prompts`, mt-bench), **not yet run**. User running
+   notebook 02 then notebook 03 in sequence. Once both land: transcribe the new
+   numbers into `docs/findings.md`, superseding the placeholder-prompt entries
+   (keep them for the record, don't delete).
+4. **Notebook 05** (aggressive quantization tradeoff) — written, not yet run,
+   running in parallel with #3. Once it lands: transcribe into findings.md,
+   whatever the answer turns out to be (quality survives and memory improves;
+   quality survives but memory doesn't improve enough; quality breaks first —
+   all three are valid, reportable outcomes).
+5. `docs/findings.md` already has solid methods for all conditions — once #3
+   and #4 land with real numbers, `docs/paper-draft.md` can start drawing
+   directly from it.
 
 ## Workflow note (2026-07-23)
 

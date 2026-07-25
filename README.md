@@ -35,6 +35,9 @@ mirroring the prior project's notebook-driven workflow:
 - `04_compressed_checkpoint_memory.ipynb` — standalone VRAM footprint of the
   genuinely compressed checkpoint (vLLM can't load it as a drafter directly — see
   `docs/findings.md`).
+- `05_aggressive_quant_tradeoff.ipynb` — tests whether pushing quantization down
+  a further bit-width tier (W3/W2 mix, vs. the flagship W4/W3) narrows the memory
+  gap against EAGLE-3, and what it costs in quality (WikiText-2 PPL proxy).
 
 ### 3. Results & docs
 

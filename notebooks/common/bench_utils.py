@@ -2,7 +2,8 @@
 
 Used by notebooks/02_baseline_eagle3.ipynb and notebooks/03_sgt_qat_drafter_bench.ipynb
 so both the EAGLE-3 baseline and the SGT-QAT drafter experiment are measured with
-identical logic. Meant to run inside a Colab Pro GPU session (imports vllm/torch).
+identical logic, including the same real prompt set (load_benchmark_prompts).
+Meant to run inside a Colab Pro GPU session (imports vllm/torch).
 
 Adapts the config + metrics pattern from vendor/vllm's
 examples/features/speculative_decoding/spec_decode_offline.py, extended with wall-clock
@@ -105,6 +106,49 @@ def extract_spec_decode_metrics(llm) -> dict:
         "mean_acceptance_length": mean_acceptance_length,
         "acceptance_rate_by_position": acceptance_rate_by_position,
     }
+
+
+def load_benchmark_prompts(target_model: str, num_prompts: int = 80) -> list[str]:
+    """Load real benchmark prompts (mt-bench) via vLLM's own dataset utilities --
+    the same convention examples/features/speculative_decoding/spec_decode_offline.py
+    uses in its own --test mode (dataset_name="hf", dataset_path="philschmid/mt-bench").
+
+    Shared between notebooks 02 and 03 so both conditions are guaranteed to see the
+    exact same prompt set, not just "the same dataset name" -- call this with the
+    same target_model/num_prompts in both notebooks.
+
+    Raises rather than silently falling back to placeholder text on failure, so a
+    broken dataset load is obvious immediately rather than producing a benchmark
+    that looks real but silently used fake data again.
+    """
+    from transformers import AutoTokenizer
+    from vllm.benchmarks.datasets import add_dataset_parser, get_samples
+    from vllm.utils.argparse_utils import FlexibleArgumentParser
+
+    tokenizer = AutoTokenizer.from_pretrained(target_model, trust_remote_code=True)
+    parser = FlexibleArgumentParser()
+    add_dataset_parser(parser)
+    args = parser.parse_args(
+        [
+            "--dataset-name",
+            "hf",
+            "--dataset-path",
+            "philschmid/mt-bench",
+            "--num-prompts",
+            str(num_prompts),
+        ]
+    )
+    args.enable_multimodal_chat = False
+    samples = get_samples(args, tokenizer)
+    prompts = [s.prompt for s in samples]
+
+    if len(prompts) != num_prompts:
+        raise RuntimeError(
+            f"Expected {num_prompts} prompts from mt-bench, got {len(prompts)} -- "
+            "dataset loading may have silently truncated or changed shape. "
+            "Investigate before trusting downstream benchmark results."
+        )
+    return prompts
 
 
 def run_benchmark(
