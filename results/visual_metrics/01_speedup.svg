@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="520" viewBox="0 0 760 520" font-family="Helvetica, Arial, sans-serif">
+<rect width="760" height="520" fill="#ffffff"/>
+<title>Wall-Clock Speedup vs. No Speculative Decoding</title>
+<text x="380.0" y="34" font-size="20" font-weight="bold" text-anchor="middle" fill="#202124">Wall-Clock Speedup vs. No Speculative Decoding</text>
+<text x="380.0" y="56" font-size="13" font-weight="normal" text-anchor="middle" fill="#5f6368">Qwen3-8B target, real mt-bench prompts (80 prompts, 256 max tokens, max_model_len=4096)</text>
+<line x1="90" y1="410.0" x2="720" y2="410.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="414.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">0</text>
+<line x1="90" y1="348.0" x2="720" y2="348.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="352.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">0.5</text>
+<line x1="90" y1="286.0" x2="720" y2="286.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="290.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">1</text>
+<line x1="90" y1="224.0" x2="720" y2="224.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="228.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">1.5</text>
+<line x1="90" y1="162.0" x2="720" y2="162.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="166.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">2</text>
+<line x1="90" y1="100.0" x2="720" y2="100.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="104.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">2.5</text>
+<text transform="rotate(-90 24 255.0)" x="24" y="255.0" font-size="12" font-weight="normal" text-anchor="middle" fill="#5f6368">Speedup (x)</text>
+<rect x="142.5" y="286.0" width="105.0" height="124.0" fill="#9aa0a6" rx="4"/>
+<text x="195.0" y="276.0" font-size="15" font-weight="bold" text-anchor="middle" fill="#202124">1.00x</text>
+<text x="195.0" y="432" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">No spec-decode</text>
+<rect x="352.5" y="142.2" width="105.0" height="267.8" fill="#4285f4" rx="4"/>
+<text x="405.0" y="132.15999999999997" font-size="15" font-weight="bold" text-anchor="middle" fill="#202124">2.16x</text>
+<text x="405.0" y="432" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">EAGLE-3</text>
+<rect x="562.5" y="356.7" width="105.0" height="53.3" fill="#ea4335" rx="4"/>
+<text x="615.0" y="346.68" font-size="15" font-weight="bold" text-anchor="middle" fill="#202124">0.43x</text>
+<text x="615.0" y="432" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">SGT-QAT drafter</text>
+<line x1="90" y1="410" x2="720" y2="410" stroke="#202124" stroke-width="1.5"/>
+<text x="380.0" y="506" font-size="10" font-weight="normal" text-anchor="middle" fill="#80868b">Source: docs/findings.md 2026-07-25 "Real-prompt SGT-QAT drafter run" -- results/*2026-07-25T0[89]*.json</text>
+</svg>
