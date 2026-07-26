@@ -1,29 +1,21 @@
 # vLLM bug report — draft (not yet filed)
 
-Status: draft, 2026-07-25, **BLOCKED pending re-verification, 2026-07-26.**
-Running `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`'s
-minimal repro (plain, single-scheme W4A16, no mixed precision) did **not**
-reproduce the bug — it loaded successfully in vLLM. The scope claim below
-("any compressed-tensors checkpoint fails") is therefore currently
-**unverified and possibly wrong**. The remaining, still-untested hypothesis is
-that the bug is specific to **mixed-precision** (`config_groups`, different
-bit-widths per layer subset) compressed-tensors checkpoints — notebook 06
-section 5 tests this directly. **Do not file this issue, and do not fill in
-the placeholders below, until section 5 has actually been run and confirms
-which claim (if either) is correct.** If section 5 also fails to reproduce,
-stop and reconsider before filing anything — it may mean whatever we actually
-hit is checkpoint- or environment-specific in a way this draft doesn't yet
-capture correctly.
+Status: draft, 2026-07-26 — scope **confirmed** via
+`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`. Section 3
+(plain, single-scheme W4A16 compressed-tensors checkpoint) loaded
+successfully. Section 5/5b (mixed-precision `config_groups`, W4 on half the
+layers / W3 on the rest, same tiny model) reproduced the exact failure —
+same `ValueError`, same `layers.0.mlp.down_proj.weight_packed` module path as
+our original discovery on the real Qwen3-1.7B checkpoint. **The bug is
+specifically about mixed-precision (`config_groups`) compressed-tensors
+checkpoints, not compressed-tensors checkpoints in general** — the report
+below is scoped to that, not the broader (and wrong) claim from the first
+draft.
 
-Once re-verified: **do not file until the placeholders below are filled
-with real, pasted output from `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`**
-— per this project's standing rule, never submit fabricated or reconstructed
-data to an external tracker. Everything else below (the error message, the
-mechanism, the original discovery context) is sourced from `docs/findings.md`
-2026-07-24 and `docs/context.md` "RESOLVED: notebook 03 draft_model loading" —
-but the "Describe the bug" / "Steps to reproduce" sections below will need
-editing to reflect the mixed-precision-specific scope if that's what section 5
-confirms, rather than the current "any compressed-tensors checkpoint" framing.
+Still need before filing: fresh `collect_env`/`pip show vllm` output from
+notebook 06's section 1 (not yet pasted back) — see the "Before filing"
+checklist at the bottom. Do not fill those placeholders with anything but
+real pasted output.
 
 This is a draft for the *text* of a GitHub issue against `vllm-project/vllm`.
 Filing it (actually opening the issue) is a separate, explicit step — this
@@ -33,57 +25,69 @@ file does not do that on its own.
 
 ## Title
 
-`[Bug]: SpeculativeConfig method="draft_model" cannot load compressed-tensors packed checkpoints`
+`[Bug]: SpeculativeConfig method="draft_model" cannot load mixed-precision compressed-tensors checkpoints (config_groups)`
 
 ## Your current environment
 
 The output of `python -m vllm.collect_env`:
 
 ```
-<PASTE collect_env OUTPUT HERE — from notebook 06, cell 1>
+<PASTE collect_env OUTPUT HERE — from notebook 06, section 1>
 ```
 
 `pip show vllm` output:
 
 ```
-<PASTE pip show vllm OUTPUT HERE — from notebook 06, cell 1>
+<PASTE pip show vllm OUTPUT HERE — from notebook 06, section 1>
 ```
 
 ## 🐛 Describe the bug
 
 We're benchmarking a quantized (GPTQ + QAT, via `llmcompressor`, saved with
 `compressed-tensors`' `save_compressed=True`) dense model as a speculative-decoding
-drafter, compared against vLLM's built-in EAGLE-3 drafters. Loading our
-compressed drafter checkpoint via `speculative_config={"method": "draft_model", ...}`
-fails — vLLM builds the draft model's linear layers as plain, unquantized
-`RowParallelLinear`/`nn.Linear` modules expecting an ordinary `.weight` tensor,
-but the checkpoint genuinely stores compressed-tensors packed weights under
-`.weight_packed` (plus separate `weight_scale`/`weight_zero_point` buffers) —
-so the load fails outright, regardless of whether `quant_config` gets correctly
-re-derived for the draft model at the `VllmConfig` level (it appears to; that
-resolution just doesn't reach how the draft model's actual `nn.Module` layers
-get constructed).
+drafter, compared against vLLM's built-in EAGLE-3 drafters. Our checkpoint uses
+a **mixed-precision** recipe — `GPTQModifier(config_groups={...})` with two
+groups at different bit-widths (W4 on one layer subset, W3 on the rest, in our
+case sensitivity-ranked but that's irrelevant to this bug). Loading it via
+`speculative_config={"method": "draft_model", ...}` fails.
 
-We originally hit this with a mixed-precision (W4/W3) checkpoint on a
-Qwen3-1.7B drafter targeting Qwen3-8B — see the minimal repro below for why
-that's not actually necessary to trigger the bug: a single, plain, unmixed
-`W4A16` GPTQ checkpoint on a tiny public model reproduces the identical failure
-shape.
+**We isolated this to mixed precision specifically**, not compressed-tensors
+checkpoints in general: a plain, single-scheme `GPTQModifier(scheme="W4A16")`
+checkpoint (no `config_groups`, uniform bit-width) loads as a `draft_model`
+with no issue. Only the `config_groups`-based, per-layer-different-bit-width
+checkpoint fails — see the minimal repro below, which demonstrates both the
+passing and failing case side by side on the same tiny model.
 
 **Steps to reproduce** (minimal repro — no private checkpoints, small model,
-runs in a couple of minutes on a single GPU):
+runs in a few minutes on a single GPU):
 
-1. Quantize any model with `llmcompressor.oneshot()` + `GPTQModifier`, saved via
-   `model.save_pretrained(path, save_compressed=True)` (genuine compressed-tensors
-   packed export — confirmed via `weight_packed` present in the saved
-   `.safetensors` keys, not a full-precision fallback):
+1. Quantize a small model with `llmcompressor.oneshot()` + `GPTQModifier`
+   using **two `config_groups` at different bit-widths**, save via
+   `model.save_pretrained(path, save_compressed=True)`:
    ```python
    from llmcompressor import oneshot
    from llmcompressor.modifiers.quantization import GPTQModifier
 
-   recipe = GPTQModifier(targets="Linear", ignore=["lm_head"], scheme="W4A16", dampening_frac=0.01)
+   all_linear_names = [n for n, m in model.named_modules()
+                        if isinstance(m, torch.nn.Linear) and n != "lm_head"]
+   mid = len(all_linear_names) // 2
+   group_w4, group_w3 = all_linear_names[:mid], all_linear_names[mid:]
+
+   recipe = GPTQModifier(
+       dampening_frac=0.01, ignore=["lm_head"],
+       config_groups={
+           "w4_group": {
+               "targets": group_w4, "input_activations": None, "output_activations": None,
+               "weights": {"num_bits": 4, "type": "int", "symmetric": True, "strategy": "group", "group_size": 128},
+           },
+           "w3_group": {
+               "targets": group_w3, "input_activations": None, "output_activations": None,
+               "weights": {"num_bits": 3, "type": "int", "symmetric": True, "strategy": "group", "group_size": 128},
+           },
+       },
+   )
    oneshot(model=model, dataset=calib_dataset, recipe=recipe, max_seq_length=2048, num_calibration_samples=32)
-   model.save_pretrained("checkpoints/tiny-w4a16-compressed", save_compressed=True)
+   model.save_pretrained("checkpoints/tiny-mixed-compressed", save_compressed=True)
    ```
 2. Load it as a vLLM speculative-decoding drafter:
    ```python
@@ -93,41 +97,76 @@ runs in a couple of minutes on a single GPU):
        model="Qwen/Qwen3-0.6B",
        speculative_config={
            "method": "draft_model",
-           "model": "checkpoints/tiny-w4a16-compressed",
+           "model": "checkpoints/tiny-mixed-compressed",
            "num_speculative_tokens": 3,
        },
        max_model_len=2048,
    )
    ```
+3. For contrast, the exact same steps with a single-scheme recipe
+   (`GPTQModifier(targets="Linear", ignore=["lm_head"], scheme="W4A16", dampening_frac=0.01)`,
+   no `config_groups`) load without error — confirming this is specific to the
+   mixed-precision/`config_groups` case, not compressed-tensors checkpoints
+   generally.
 
-Full runnable version (including the calibration-data setup and environment
-bootstrap): `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`
-at https://github.com/Resh19S/sgt-qat-draft (see that notebook's cells 2-3
-for the exact code executed).
+Full runnable version (both the passing single-scheme case and the failing
+mixed-precision case, plus the environment bootstrap):
+`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` at
+https://github.com/Resh19S/sgt-qat-draft (sections 2-3 = passing case,
+sections 5-5b = failing case).
 
-**Actual behavior**: raises (originally observed on our mixed-precision
-Qwen3-1.7B checkpoint, `layers.0.mlp.down_proj` — the exact module name will
-differ on the minimal repro's tiny model, but the failure shape is the same):
+**Actual behavior**: raises, both on our original Qwen3-1.7B mixed-precision
+checkpoint and on the tiny public-model minimal repro above (identical failure
+shape, only the layer name/model differs):
 
 ```
-<PASTE FULL TRACEBACK HERE — from notebook 06, cell "Trigger the bug", after
-running it against the minimal repro. Original error, for reference, was:>
+DEBUG 07-26 16:50:41 [model_executor/models/utils.py:283] Loaded weight layers.0.input_layernorm.weight with shape torch.Size([1024])
+---------------------------------------------------------------------------
+ValueError                                Traceback (most recent call last)
+/tmp/ipykernel_960/3853740456.py in <cell line: 0>()
+      5 from vllm import LLM
+      6
+----> 7 llm_mixed = LLM(
+      8     model=MODEL_ID,
+      9     speculative_config={
 
-ValueError: There is no module or parameter named 'layers.0.mlp.down_proj.weight_packed'
-in Qwen3Model. The available parameters belonging to layers.0.mlp.down_proj
-(RowParallelLinear) are: {'layers.0.mlp.down_proj.weight'}
+31 frames
+/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/utils.py in _load_module(self, base_prefix, module, weights)
+    393                     f"({module._get_name()}) are: {desc_param_keys}"
+    394                 )
+--> 395                 raise ValueError(msg)
+    396
+    397     @support_quantized_model_reload_from_hp_weights
+
+ValueError: There is no module or parameter named 'layers.0.mlp.down_proj.weight_packed' in Qwen3Model. The available parameters belonging to layers.0.mlp.down_proj (RowParallelLinear) are: {'layers.0.mlp.down_proj.weight'}
 ```
+
+(Colab collapsed the middle frames to "31 frames" — happy to expand the full
+stack if useful, but the `_load_module` frame at
+`vllm/model_executor/models/utils.py:395` is where it actually raises.)
 
 **Expected behavior**: `method="draft_model"` should either (a) correctly
 construct the draft model's layers using the quantized module type implied by
-its own `config.json`'s `quantization_config` (the same way the *target* model's
-quantized layers get constructed when the target itself is quantized), or (b) if
-compressed-tensors packed draft checkpoints are genuinely unsupported, fail with
-a clear, actionable error at config-validation time rather than a generic
-attribute-lookup `ValueError` deep in model construction.
+its own `config.json`'s `quantization_config` — the same way this already
+works for a *single-scheme* compressed-tensors checkpoint (confirmed working,
+see above) — extended to handle the `config_groups`/mixed-precision case, or
+(b) if mixed-precision draft checkpoints are genuinely unsupported for some
+structural reason, fail with a clear, actionable error at config-validation
+time rather than a generic attribute-lookup `ValueError` deep in
+`_load_module`.
 
 ## Additional context
 
+- **The single-scheme case already works** — this is not a blanket
+  "compressed-tensors draft models are unsupported" issue, it's specifically
+  the mixed-precision/`config_groups` path. That's a narrower, hopefully
+  easier fix surface than the general case.
+- The `_load_module` frame is immediately followed (in the source, per the
+  traceback context above) by a decorator named
+  `support_quantized_model_reload_from_hp_weights` — we haven't traced
+  whether that decorator is relevant to this path or just adjacent in the
+  file, but it seemed like a plausible starting pointer given the name, so
+  flagging it rather than silently omitting it.
 - We worked around this by decompressing the checkpoint ourselves before
   loading (`compressed_tensors.ModelCompressor.from_pretrained_model()` +
   `.decompress_model()`, then explicitly replacing each still-quantized-typed
@@ -135,38 +174,35 @@ attribute-lookup `ValueError` deep in model construction.
   module's own serialization logic kept re-adding `weight_scale`/`weight_shape`
   even after we deleted the underlying buffers directly, so a straight
   attribute-delete wasn't enough) and re-saving without `save_compressed=True`.
-  This works, but obviously discards the whole point of shipping a compressed
-  drafter — the "loaded" checkpoint we benchmark is back to full-precision
-  size in VRAM.
+  This works, but discards the whole point of shipping a compressed drafter —
+  the "loaded" checkpoint we actually benchmark is back to full-precision size
+  in VRAM.
 - As a separate, useful data point even without a fix: we measured the
-  genuinely compressed checkpoint's **standalone** (no vLLM, direct
-  `transformers.AutoModelForCausalLM.from_pretrained()` load, no KV cache, no
-  serving overhead) VRAM footprint independently, to at least get a real
-  memory number for the compressed weights even though we can't benchmark them
-  in-serving. Happy to share that methodology/numbers if useful signal for
-  prioritizing a fix — quantized drafters only make sense as a memory-saving
-  lever if this path works end-to-end.
-- We did not dig further into *why* the config-level `quant_config`
-  re-derivation (which does appear to correctly identify the draft model as
-  quantized, per `VllmConfig.__post_init__`) doesn't propagate to how the draft
-  model's layers actually get instantiated — flagging in case that's a useful
-  starting pointer for whoever picks this up, but we haven't traced the exact
-  code path ourselves beyond confirming the empirical failure.
+  genuinely compressed (mixed-precision) checkpoint's **standalone** (no
+  vLLM, direct `transformers.AutoModelForCausalLM.from_pretrained()` load, no
+  KV cache, no serving overhead) VRAM footprint independently, to at least get
+  a real memory number for the compressed weights even though we can't
+  benchmark them in-serving. Happy to share that methodology/numbers if
+  useful signal for prioritizing a fix — mixed-precision quantized drafters
+  only make sense as a memory-saving lever if this path works end-to-end.
 
 ---
 
 ## Before filing — checklist
 
-- [ ] Ran `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`
+- [x] Ran `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`
       end-to-end on a fresh Colab session.
-- [ ] Confirmed cell 2's `assert has_packed` passed (checkpoint genuinely saved
-      compressed, not a silent full-precision fallback).
-- [ ] Confirmed cell 3 actually raised an error (if it didn't, **stop** — either
-      this is fixed upstream already, or the repro needs adjusting; don't file
-      a bug that no longer reproduces).
-- [ ] Pasted the real `collect_env`/`pip show vllm` output into the placeholders
-      above.
-- [ ] Pasted the real, full traceback from cell 3 into the placeholder above.
+- [x] Confirmed the mixed-precision checkpoint's `assert has_packed` passed
+      (checkpoint genuinely saved compressed, not a silent full-precision
+      fallback).
+- [x] Confirmed the mixed-precision trigger cell actually raised the error
+      (single-scheme case did NOT raise — that's the scope-narrowing finding
+      already folded into this draft).
+- [ ] Pasted the real `collect_env`/`pip show vllm` output into the
+      placeholders above.
+- [x] Pasted the real, full traceback into the placeholder above (from the
+      2026-07-26 run).
 - [ ] Re-read the filled-in issue once more before submitting — this file was
-      drafted with placeholders precisely so nothing gets filed without a human
-      checking the actual pasted data matches what's claimed in the prose.
+      drafted with placeholders precisely so nothing gets filed without a
+      human checking the actual pasted data matches what's claimed in the
+      prose.

@@ -615,3 +615,17 @@ actually confirms or disconfirms this -- didn't want a half-verified claim
 sitting in a file that looks filing-ready. This is exactly why the
 "minimal repro" step existed in the first place rather than just filing the
 original observation as fact.
+
+Section 5b confirmed the mixed-precision hypothesis: identical ValueError,
+identical `layers.0.mlp.down_proj.weight_packed` module path, on the tiny
+public model with a `config_groups` (W4/W3 split) recipe. Single-scheme
+W4A16 loads fine; mixed-precision `config_groups` fails. Rewrote
+`docs/vllm-bug-report-draft.md` around the now-confirmed, narrower, more
+useful scope (mixed-precision specifically, not compressed-tensors in
+general) and filled in the real traceback (including the
+`vllm/model_executor/models/utils.py:395` `_load_module` frame, and the
+adjacent `support_quantized_model_reload_from_hp_weights` decorator name as
+a possible pointer for maintainers -- flagged honestly as "noticed, not
+traced" rather than claiming we understand the mechanism). Still missing:
+`collect_env`/`pip show vllm` output from section 1 -- only genuinely
+blocking item left before this can be filed.
