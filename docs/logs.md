@@ -629,3 +629,15 @@ a possible pointer for maintainers -- flagged honestly as "noticed, not
 traced" rather than claiming we understand the mechanism). Still missing:
 `collect_env`/`pip show vllm` output from section 1 -- only genuinely
 blocking item left before this can be filed.
+
+User pasted the real `pip show vllm` + `collect_env` output. Confirms this
+reproduces on **vLLM 0.26.0** -- newer than the "0.25.1" originally noted
+back on 2026-07-24, so the bug survived at least one version bump; good
+thing that stale, never-actually-pip-show-verified number wasn't reused in
+the filed report. Trimmed the pasted collect_env output slightly for length
+(full pip freeze list, CPU vulnerability listing) -- noted explicitly in the
+draft that this was a trim of real data, not a fabrication, and that
+nothing omitted is relevant to the bug. `docs/vllm-bug-report-draft.md` is
+now fully filled in -- every placeholder replaced with real, pasted data.
+Only remaining checklist item is the user's own final read-through before
+filing on GitHub; nothing left for this session to do here.

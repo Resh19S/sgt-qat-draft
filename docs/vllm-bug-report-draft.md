@@ -12,10 +12,12 @@ checkpoints, not compressed-tensors checkpoints in general** — the report
 below is scoped to that, not the broader (and wrong) claim from the first
 draft.
 
-Still need before filing: fresh `collect_env`/`pip show vllm` output from
-notebook 06's section 1 (not yet pasted back) — see the "Before filing"
-checklist at the bottom. Do not fill those placeholders with anything but
-real pasted output.
+`collect_env`/`pip show vllm` output pasted in below (2026-07-26) — confirms
+this reproduces on **vLLM 0.26.0** (newer than the "0.25.1" noted in the
+original discovery back in `docs/findings.md` 2026-07-24 — good thing that
+stale number wasn't reused here, since the bug evidently survived at least
+one version bump). All placeholders now filled with real data; only the
+final "re-read before submitting" checklist item remains.
 
 This is a draft for the *text* of a GitHub issue against `vllm-project/vllm`.
 Filing it (actually opening the issue) is a separate, explicit step — this
@@ -29,17 +31,109 @@ file does not do that on its own.
 
 ## Your current environment
 
-The output of `python -m vllm.collect_env`:
-
-```
-<PASTE collect_env OUTPUT HERE — from notebook 06, section 1>
-```
-
 `pip show vllm` output:
 
 ```
-<PASTE pip show vllm OUTPUT HERE — from notebook 06, section 1>
+Name: vllm
+Version: 0.26.0
+Summary: A high-throughput and memory-efficient inference and serving engine for LLMs
+Home-page: https://github.com/vllm-project/vllm
+Author: vLLM Team
+Author-email:
+License:
+Location: /usr/local/lib/python3.12/dist-packages
+Requires: aiohttp, anthropic, apache-tvm-ffi, blake3, cachetools, cbor2, cloudpickle, compressed-tensors, depyf, einops, fastapi, fastsafetensors, filelock, flashinfer-python, humming-kernels, ijson, jsonschema, lark, llguidance, lm-format-enforcer, mcp, mistral_common, model-hosting-container-standards, msgspec, ninja, numba, numpy, nvidia-cudnn-frontend, nvidia-cutlass-dsl, nvtx, openai, openai-harmony, opencv-python-headless, opentelemetry-api, opentelemetry-exporter-otlp, opentelemetry-sdk, opentelemetry-semantic-conventions-ai, outlines_core, partial-json-parser, pillow, prometheus-fastapi-instrumentator, prometheus_client, protobuf, psutil, py-cpuinfo, pybase64, pydantic, PyNvVideoCodec, python-json-logger, pyyaml, pyzmq, quack-kernels, regex, requests, safetensors, sentencepiece, setproctitle, setuptools, six, starlette, tiktoken, tilelang, tokenizers, tokenspeed-mla, torch, torchaudio, torchcodec, torchvision, tqdm, transformers, typing_extensions, watchfiles, xgrammar
+Required-by:
 ```
+
+The output of `python -m vllm.collect_env`:
+
+```
+Collecting environment information...
+==============================
+        System Info
+==============================
+OS                           : Ubuntu 22.04.5 LTS (x86_64)
+GCC version                  : (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
+Clang version                : Could not collect
+CMake version                : version 3.31.10
+Libc version                 : glibc-2.35
+
+==============================
+       PyTorch Info
+==============================
+PyTorch version              : 2.11.0+cu128
+Is debug build               : False
+CUDA used to build PyTorch   : 12.8
+ROCM used to build PyTorch   : N/A
+XPU used to build PyTorch    : N/A
+
+==============================
+      Python Environment
+==============================
+Python version               : 3.12.13 (main, Mar  4 2026, 09:23:07) [GCC 11.4.0] (64-bit runtime)
+Python platform              : Linux-6.6.122+-x86_64-with-glibc2.35
+
+==============================
+       CUDA / GPU Info
+==============================
+Is CUDA available            : True
+CUDA runtime version         : 12.8.93
+GPU models and configuration : GPU 0: NVIDIA L4
+Nvidia driver version        : 580.82.07
+cuDNN version                : Probably one of the following:
+/usr/lib/x86_64-linux-gnu/libcudnn.so.9.8.0
+/usr/lib/x86_64-linux-gnu/libcudnn_adv.so.9.8.0
+/usr/lib/x86_64-linux-gnu/libcudnn_cnn.so.9.8.0
+/usr/lib/x86_64-linux-gnu/libcudnn_engines_precompiled.so.9.8.0
+/usr/lib/x86_64-linux-gnu/libcudnn_engines_runtime_compiled.so.9.8.0
+/usr/lib/x86_64-linux-gnu/libcudnn_graph.so.9.8.0
+/usr/lib/x86_64-linux-gnu/libcudnn_heuristic.so.9.8.0
+/usr/lib/x86_64-linux-gnu/libcudnn_ops.so.9.8.0
+HIP runtime version          : N/A
+MIOpen runtime version       : N/A
+Is XNNPACK available         : True
+
+==============================
+          CPU Info
+==============================
+Architecture:                            x86_64
+CPU(s):                                  12
+Vendor ID:                               GenuineIntel
+Model name:                              Intel(R) Xeon(R) CPU @ 2.20GHz
+Hypervisor vendor:                       KVM
+Virtualization type:                     full
+NUMA node(s):                            1
+
+==============================
+       CUDA / GPU Info (topology)
+==============================
+GPU0	 X 	0-11	0		N/A
+
+==============================
+Versions of relevant libraries
+==============================
+[pip3] flashinfer-python==0.6.14
+[pip3] numpy==2.0.2
+[pip3] torch==2.11.0+cu128
+[pip3] torchaudio==2.11.0+cu128
+[pip3] torchvision==0.26.0+cu128
+[pip3] transformers==5.13.1
+[pip3] triton==3.6.0
+[conda] Could not collect
+
+==============================
+         vLLM Info
+==============================
+ROCM Version                 : Could not collect
+vLLM Version                 : 0.26.0
+vLLM Build Flags:
+  CUDA Archs: Not Set; ROCm: Disabled; XPU: Disabled
+```
+
+(Full pip freeze and CPU flags/vulnerability listing omitted here for length
+— available in the original notebook output if a maintainer needs the
+complete listing; nothing omitted is relevant to this bug.)
 
 ## 🐛 Describe the bug
 
@@ -198,11 +292,13 @@ time rather than a generic attribute-lookup `ValueError` deep in
 - [x] Confirmed the mixed-precision trigger cell actually raised the error
       (single-scheme case did NOT raise — that's the scope-narrowing finding
       already folded into this draft).
-- [ ] Pasted the real `collect_env`/`pip show vllm` output into the
-      placeholders above.
+- [x] Pasted the real `collect_env`/`pip show vllm` output into the
+      placeholders above (2026-07-26 — confirms this reproduces on vLLM 0.26.0).
 - [x] Pasted the real, full traceback into the placeholder above (from the
       2026-07-26 run).
-- [ ] Re-read the filled-in issue once more before submitting — this file was
-      drafted with placeholders precisely so nothing gets filed without a
-      human checking the actual pasted data matches what's claimed in the
-      prose.
+- [ ] **Re-read the filled-in issue once more before submitting** — this is
+      the only remaining item, and it's yours to do, not something to
+      check off on your behalf. Everything above is now real, pasted data;
+      nothing left is fabricated or a placeholder. Once you've read it
+      through, this is ready to file at
+      https://github.com/vllm-project/vllm/issues/new/choose.
