@@ -1,11 +1,29 @@
 # vLLM bug report — draft (not yet filed)
 
-Status: draft, 2026-07-25. **Do not file until the placeholders below are filled
+Status: draft, 2026-07-25, **BLOCKED pending re-verification, 2026-07-26.**
+Running `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`'s
+minimal repro (plain, single-scheme W4A16, no mixed precision) did **not**
+reproduce the bug — it loaded successfully in vLLM. The scope claim below
+("any compressed-tensors checkpoint fails") is therefore currently
+**unverified and possibly wrong**. The remaining, still-untested hypothesis is
+that the bug is specific to **mixed-precision** (`config_groups`, different
+bit-widths per layer subset) compressed-tensors checkpoints — notebook 06
+section 5 tests this directly. **Do not file this issue, and do not fill in
+the placeholders below, until section 5 has actually been run and confirms
+which claim (if either) is correct.** If section 5 also fails to reproduce,
+stop and reconsider before filing anything — it may mean whatever we actually
+hit is checkpoint- or environment-specific in a way this draft doesn't yet
+capture correctly.
+
+Once re-verified: **do not file until the placeholders below are filled
 with real, pasted output from `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`**
 — per this project's standing rule, never submit fabricated or reconstructed
 data to an external tracker. Everything else below (the error message, the
 mechanism, the original discovery context) is sourced from `docs/findings.md`
-2026-07-24 and `docs/context.md` "RESOLVED: notebook 03 draft_model loading".
+2026-07-24 and `docs/context.md` "RESOLVED: notebook 03 draft_model loading" —
+but the "Describe the bug" / "Steps to reproduce" sections below will need
+editing to reflect the mixed-precision-specific scope if that's what section 5
+confirms, rather than the current "any compressed-tensors checkpoint" framing.
 
 This is a draft for the *text* of a GitHub issue against `vllm-project/vllm`.
 Filing it (actually opening the issue) is a separate, explicit step — this

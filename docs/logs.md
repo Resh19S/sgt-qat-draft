@@ -593,3 +593,25 @@ everything that needs live data, plus a "before filing" checklist at the
 bottom. Nothing has been filed/submitted anywhere -- this is draft text
 only, sitting in the repo until the user runs notebook 06 and fills in the
 real data.
+
+Ran notebook 06's section 1-3 (2026-07-26). First real surprise: forgot to
+actually `!pip install vllm` in the notebook before importing it -- fixed
+that (also added the known cu13/libcudart symlink fix from notebooks 02/03
+proactively, since this is a fresh environment). Second, bigger surprise
+once that was fixed: the minimal repro (plain, single-scheme W4A16, no
+mixed precision) **loaded successfully in vLLM** -- no ValueError, full
+engine init completed (191s). The "any compressed-tensors checkpoint fails"
+framing in the original bug report draft is not what actually happened --
+my simplification to "the smallest thing that's still compressed-tensors"
+apparently also stripped out the actual trigger. Real remaining hypothesis:
+the bug is specific to **mixed-precision** (`config_groups`, different
+bit-widths per layer subset) checkpoints, since that's the one structural
+difference between this (passing) minimal repro and our original (failing)
+SGT-QAT checkpoint. Added section 5 to notebook 06 to test that directly
+(same tiny model, but with two config_groups mirroring notebook 01's real
+structure) before touching the bug report draft further. Marked
+`docs/vllm-bug-report-draft.md` as blocked/do-not-file until section 5
+actually confirms or disconfirms this -- didn't want a half-verified claim
+sitting in a file that looks filing-ready. This is exactly why the
+"minimal repro" step existed in the first place rather than just filing the
+original observation as fact.
