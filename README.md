@@ -38,6 +38,9 @@ mirroring the prior project's notebook-driven workflow:
 - `05_aggressive_quant_tradeoff.ipynb` — tests whether pushing quantization down
   a further bit-width tier (W3/W2 mix, vs. the flagship W4/W3) narrows the memory
   gap against EAGLE-3, and what it costs in quality (WikiText-2 PPL proxy).
+- `06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` — minimal, public,
+  self-contained repro of the vLLM `draft_model`-loading bug found in `04`/`findings.md`,
+  for the upstream bug report draft at `docs/vllm-bug-report-draft.md` (not yet filed).
 
 ### 3. Results & docs
 

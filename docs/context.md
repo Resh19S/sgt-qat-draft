@@ -370,13 +370,31 @@ did successfully go through git — only the checkpoint binary itself goes via D
    depends on. Didn't run the expensive 8B/vLLM acceptance-rate check at this
    bit-width — the PPL collapse alone is disqualifying. See findings.md
    "Aggressive quantization tradeoff".
-5. **All Phase 3 experiments are now landed with real data.** `docs/findings.md`
-   has methods + numbers for every condition (no-spec / EAGLE-3 / SGT-QAT
-   drafter, plus the aggressive-quant memory/quality tradeoff). Next real step
-   is Phase 4 packaging: decide the paper's honest framing (quality-parity +
-   architectural-cost story, not an EAGLE-parity chase — see the user's
-   2026-07-25 discussion and the deferred "Project Y" idea in memory) and
-   start drafting `docs/paper-draft.md` from what's already written up.
+5. ~~All Phase 3 experiments landed with real data~~ — **done**. `docs/findings.md`
+   has methods + numbers for every condition. `docs/paper-draft.md` first draft
+   written 2026-07-25, and `results/visual_metrics/` has 6 poster-ready SVG
+   charts generated from findings.md (regenerate via
+   `results/visual_metrics/generate_charts.py` if numbers ever change — never
+   hand-edit the SVGs).
+6. **New, user-initiated (2026-07-25): open-source contribution to vLLM.**
+   User explicitly asked to pursue this — note this is the first work in the
+   "out of scope" category CLAUDE.md flagged as a later, explicitly-requested
+   phase; CLAUDE.md itself hasn't been updated to reflect that this has now
+   started, worth revisiting if this becomes an ongoing part of the project.
+   Drafted (not filed) `docs/vllm-bug-report-draft.md`: a `[Bug]:`-titled
+   report for vLLM's `SpeculativeConfig(method="draft_model")` failing to load
+   compressed-tensors packed checkpoints (the exact `weight_packed` ValueError
+   from `docs/findings.md` 2026-07-24). Wrote
+   `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` — a
+   minimal, cheap, publicly-runnable repro (tiny public model, plain W4A16
+   GPTQ, no mixed precision, no private checkpoint) that isolates the actual
+   bug rather than depending on our full SGT-QAT setup. **Not yet run.** The
+   issue draft has explicit `<PASTE ... HERE>` placeholders for
+   `collect_env.py` output, `pip show vllm`, and the full traceback — none of
+   that data exists yet; do not fill those placeholders with anything but
+   real pasted output from actually running notebook 06. Do not file the
+   issue until the "Before filing" checklist at the bottom of that file is
+   complete.
 
 ## Workflow note (2026-07-23)
 

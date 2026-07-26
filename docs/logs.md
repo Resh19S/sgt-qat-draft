@@ -560,3 +560,36 @@ Wrote up both as findings.md entries (real-prompt 3-way SGT-QAT comparison,
 and the aggressive-quant tradeoff), created the two missing results/ JSON
 files from the pasted data (they existed on the user's Colab/Drive but not
 in this local repo checkout).
+
+Wrote `docs/paper-draft.md` (first real draft, not a skeleton) and
+`results/visual_metrics/` (6 SVG charts, hand-built since matplotlib isn't
+available locally -- no pip on this machine either). Spot-checked several by
+rendering to PNG via `convert` (ImageMagick, available locally) before
+trusting the layout; caught and fixed two real bugs in the generator: (1)
+tick labels used `{:.2g}` which produced ugly scientific notation for
+values >=100, (2) multi-line bar/group labels containing literal `\n` were
+being word-split instead of respecting the explicit line breaks, garbling
+two labels. Both fixed in `generate_charts.py` itself, not by hand-editing
+the SVGs, so the fix persists across regeneration.
+
+User then asked to start an actual open-source contribution to vLLM about
+the `draft_model`/compressed-tensors loading bug -- explicitly opted into
+the "out of scope" category CLAUDE.md flags as a later phase. Deliberately
+did NOT fabricate the two things a real bug report needs that only a live
+Colab session can produce: `collect_env.py` output and a fresh `pip show
+vllm` (the "vLLM 0.25.1" in findings.md was never a verified `pip show`
+paste, and vLLM was never version-pinned across sessions, so reusing it
+in a public bug report felt like the wrong call). Also decided against
+reusing our actual mixed-precision Qwen3-1.7B/Qwen3-8B repro for the bug
+report itself -- it depends on a private Drive checkpoint outside
+maintainers' reach. Instead wrote a minimal, cheap, self-contained repro
+(`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`): tiny
+public model, plain unmixed W4A16 GPTQ, no QAT -- isolates that the bug is
+about compressed-tensors packed checkpoints in general, not our specific
+recipe. Drafted the actual issue text in
+`docs/vllm-bug-report-draft.md`, following vLLM's own `[Bug]:` template,
+with explicit `<PASTE ... HERE>` placeholders (not fabricated filler) for
+everything that needs live data, plus a "before filing" checklist at the
+bottom. Nothing has been filed/submitted anywhere -- this is draft text
+only, sitting in the repo until the user runs notebook 06 and fills in the
+real data.
