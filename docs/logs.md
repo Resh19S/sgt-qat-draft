@@ -700,3 +700,58 @@ gave it to the user to post (not something to post automatically -- GitHub
 comments are visible, external, shared state). Logged status as BLOCKED in
 `docs/vllm-bug-report-draft.md` pending their response; section 6 of
 notebook 06 hasn't run yet and can't until install actually succeeds.
+
+User decided not to wait -- ran a full source build instead (~1hr, no
+`VLLM_USE_PRECOMPILED`), accepting the real compute cost rather than staying
+blocked on the maintainer's wheel infra. This then cascaded into a genuine
+environment fight, not a repro issue: the build pulled in a newer torch,
+which broke torchaudio's import-time CUDA-version check (fixed by removing
+torchaudio, unneeded here); then a plain `pip install llmcompressor` (to
+rebuild the tiny checkpoints, since Colab's VM had silently recycled during
+the long build, losing the ones from earlier) downgraded torch to satisfy
+its own `<=2.12.0` pin, breaking torchvision AND corrupting `pyarrow` into a
+mismatched-.so-vs-metadata state. Diagnosed the pyarrow break concretely
+(`pyarrow.__file__`/`__version__` vs. `pip show`) rather than guessing,
+found a clean purge fixed it, then restored torch==2.13.0 -- but recognized
+this whack-a-mole would keep recurring as long as `llmcompressor` and the
+source-built `vllm` shared one environment, since their torch pins are
+flatly incompatible. Split into two Colab sessions (build vs. serve) handed
+off via Google Drive, matching this project's existing checkpoint-storage
+pattern. Hit and fixed a `cp` semantics bug of my own along the way (first
+`cp -r src checkpoints/` flattens instead of nesting when `checkpoints/`
+doesn't exist yet) that briefly looked like a Drive-copy failure but wasn't.
+
+With a genuinely working environment, the mixed-precision checkpoint (first
+the original flat 50/50 split, then a layer-boundary-aligned rebuild after
+ruling out the split itself as the cause) got past the ORIGINAL bug
+entirely -- point 1 confirmed, the fix works for the issue as filed. But hit
+a new `AssertionError` in `vllm/model_executor/parameter.py:175`
+(`load_merged_column_weight`) partway through loading. Used `%debug`
+post-mortem to get real shape data (`param_data.shape=[3072,96]` vs.
+`loaded_weight.shape=[3072,103]`) rather than guess at the mechanism from
+the bare assert. Confirmed this isn't a repeat of the earlier
+merged-weight-boundary confound (rebuilt with a clean layer-boundary split
+specifically to rule that out, failed identically) -- this is a new, real,
+separate finding. Drafted and had the user post a follow-up PR comment with
+the exact numbers. Points 2-4 of the maintainer's original ask are now
+blocked behind this new issue, not something more debugging on our end
+would resolve.
+
+User exported the live Colab notebook (`06_..._repro1.ipynb`, 782KB with all
+debug-log outputs baked in) and pasted it into `notebooks/` so the repo's
+canonical version could be reconciled with what actually happened.
+Reconciled: replaced section 5's flat 50/50 split with the layer-boundary
+version; updated section 5/6's markdown with the real 2026-07-27 results;
+rewrote the install cell to show both the dead-end (`VLLM_USE_PRECOMPILED`)
+and working (source build) paths, documented rather than deleted; added the
+"6-prep" Drive-handoff section as first-class documentation (not just
+something I said in chat); updated 6a with the new AssertionError finding
+and `%debug` commands; updated section 7 to reflect the comment was posted.
+Deliberately did NOT carry over cell 21 from the live notebook (an abandoned
+attempt to rebuild the single-scheme checkpoint in the vllm session, before
+the two-session split was discovered) -- dead code, no reason to preserve it
+as runnable, though the failure mode it hit is captured in the new
+troubleshooting note instead. The 782KB exported file itself
+(`06_..._repro1.ipynb`) is untracked and not committed -- redundant now that
+its useful content is folded into the canonical notebook; left in place for
+the user to delete or keep as they prefer, not removed unilaterally.

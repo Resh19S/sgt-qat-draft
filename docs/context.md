@@ -377,8 +377,8 @@ did successfully go through git — only the checkpoint binary itself goes via D
    `results/visual_metrics/generate_charts.py` if numbers ever change — never
    hand-edit the SVGs).
 6. **Open-source contribution to vLLM (user-initiated 2026-07-25) — FILED,
-   fix in review, verification BLOCKED on their install path (2026-07-27).**
-   First work in the "out of scope" category CLAUDE.md flagged as a later,
+   fix in review, NEW blocker found and reported (2026-07-27).** First work
+   in the "out of scope" category CLAUDE.md flagged as a later,
    explicitly-requested phase; CLAUDE.md itself hasn't been updated to reflect
    that this has now started, worth revisiting if this becomes an ongoing part
    of the project. Full arc: minimal repro
@@ -387,24 +387,26 @@ did successfully go through git — only the checkpoint binary itself goes via D
    compressed-tensors checkpoints (single-scheme loads fine) — see
    `docs/logs.md` 2026-07-26 for the full narrowing process. Filed as
    [vllm-project/vllm#49893](https://github.com/vllm-project/vllm/issues/49893)
-   with real `collect_env`/traceback data (`docs/vllm-bug-report-draft.md` has
-   the full filed text). Maintainer `harjothkhara` confirmed and opened a fix,
-   [PR #49900](https://github.com/vllm-project/vllm/pull/49900), within hours
-   — root cause matches our own finding almost exactly (draft-model weight
-   prefix breaks exact-name/anchored-regex `config_groups` target matching).
-   **Blocked, not on our repro**: their `VLLM_USE_PRECOMPILED=1` install
-   command 404s fetching a nightly wheel for the auto-resolved commit, in
-   every variant tried (`cu130` auto-detected wrong due to an unpinned torch
-   in pip's isolated build env; `cu128` after forcing
-   `VLLM_MAIN_CUDA_VERSION=12.8`; the unversioned default) — see
-   `docs/vllm-bug-report-draft.md` and `docs/logs.md` 2026-07-27 for the full
-   diagnostic chain. Posted this as a PR comment, asking for a published
-   commit or suggesting a source build. **Waiting on their reply.** Once
-   install succeeds: notebook 06 section 6 has the 4-point check they
-   requested (mixed-precision checkpoint loads, single-scheme regression
-   check, a real generation runs, in-serving memory footprint vs. the
-   decompressed workaround). Not yet run. Report results back on the issue
-   once done.
+   with real `collect_env`/traceback data. Maintainer `harjothkhara` confirmed
+   and opened a fix, [PR #49900](https://github.com/vllm-project/vllm/pull/49900),
+   within hours — root cause matches our own finding almost exactly.
+   Their `VLLM_USE_PRECOMPILED=1` install 404s (nightly wheel infra issue,
+   reported separately, not blocking) — worked around with a full source
+   build (~1hr, real compute cost). That surfaced a second real constraint:
+   `llmcompressor` and this build's `torch==2.13.0` pin are incompatible, so
+   checkpoint-building and vllm-loading now require **two separate Colab
+   sessions** handed off via Google Drive (documented in notebook 06's new
+   "6-prep" section). **Verification result**: Point 1 confirmed (original
+   bug genuinely fixed), but hit a **new** `AssertionError` in
+   `vllm/model_executor/parameter.py:175` (`load_merged_column_weight`) —
+   `param_data.shape=[3072,96]` vs. `loaded_weight.shape=[3072,103]` loading a
+   merged column-parallel weight (likely `gate_up_proj`). Confirmed via
+   `%debug`, and confirmed it's not our test checkpoint's fault (rebuilt with
+   a layer-boundary-aligned split, failed identically). Posted as a follow-up
+   PR comment with the exact shape data — see `docs/vllm-bug-report-draft.md`
+   for the full text. **Points 2-4 (single-scheme regression, generation,
+   memory comparison) are blocked behind this new finding.** Waiting on the
+   maintainer's reply.
 
 ## Workflow note (2026-07-23)
 

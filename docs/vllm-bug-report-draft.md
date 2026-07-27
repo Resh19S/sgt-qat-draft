@@ -8,23 +8,34 @@ anchored-regex `config_groups` target matching — single-scheme worked because
 `Linear`-class-name matching is substring-based, mixed-precision (name-based)
 targets weren't. Fix PR:
 [vllm-project/vllm#49900](https://github.com/vllm-project/vllm/pull/49900)
-(Python-only, no compile needed). **Verification BLOCKED, 2026-07-27** — not
-on our repro, on their install command. `VLLM_USE_PRECOMPILED=1` tries to
-download a prebuilt wheel for vLLM's upstream `main` and layer the PR's
-Python-only changes on top; the wheel fetch 404s for the auto-resolved commit
-(`b68d7ef2622d2d22e964dd842381021865e942b8`, itself different from the
-"upstream main branch latest commit" printed alongside it), in every wheel
-variant tried (`cu130` auto-detected — wrong, due to an unpinned newer torch
-in pip's isolated build env; then `cu128` after forcing
-`VLLM_MAIN_CUDA_VERSION=12.8`; then the unversioned default). Posted this
-finding as a comment on the PR, asking for a published commit hash or to try
-a full source build. **Waiting on their reply before continuing section 6.**
-Once install succeeds: `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`
-section 6 has the 4-point check they requested (mixed-precision checkpoint
-loads, single-scheme checkpoint still loads / no regression, a real
-generation runs, and the compressed checkpoint's in-serving memory footprint
-vs. the decompressed workaround) — real numbers only when reporting back,
-same rule as everywhere else in this project.
+(Python-only, no compile needed).
+
+**Install path, resolved 2026-07-27**: `VLLM_USE_PRECOMPILED=1` 404s (their
+nightly wheel index has nothing published for the auto-resolved commit, in
+any variant — reported on the PR, no reply needed to proceed). Worked around
+with a full source build instead (`pip install "git+..."`, no
+`VLLM_USE_PRECOMPILED`, ~1hr on a Colab A100 — real compute cost). This also
+surfaced that `llmcompressor` (needed to build the test checkpoints) and this
+build's `torch==2.13.0` pin are mutually incompatible — checkpoint-building
+and vllm-loading now happen in two separate Colab sessions, handed off via
+Google Drive (see notebook 06 section "6-prep").
+
+**Verification result, 2026-07-27**: Point 1 CONFIRMED — the mixed-precision
+checkpoint no longer hits the original `weight_packed` `ValueError` at all,
+the fix works for the issue as filed. But loading now hits a **new**,
+different `AssertionError` in `vllm/model_executor/parameter.py:175`
+(`load_merged_column_weight`) further into the process — `param_data.shape`
+(`[3072, 96]`) vs. `loaded_weight.shape` (`[3072, 103]`) when loading a merged
+column-parallel weight (looks like `gate_up_proj`). Confirmed via `%debug`
+post-mortem (not a guess), and confirmed this isn't an artifact of our own
+test checkpoint's construction — rebuilt it with a layer-boundary-aligned
+split (so no merged weight straddles two bit-widths) and it failed
+identically. **Posted this as a follow-up comment on the PR** with the exact
+shape data. **Points 2-4 are blocked behind this new finding — waiting on the
+maintainer's reply before continuing section 6a onward.**
+`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` section 6
+has the full diagnostic trail and the 4-point check they originally
+requested, updated to reflect where things actually stand.
 
 The rest of this file is the original filed issue text, kept for the record.
 
