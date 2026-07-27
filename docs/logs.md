@@ -668,3 +668,35 @@ would otherwise be the same process. Not yet run. Updated
 `docs/vllm-bug-report-draft.md`'s header to reflect FILED status and link
 both the issue and the fix PR, kept the original filed text below for the
 record rather than overwriting it.
+
+Tried installing the fix branch per the maintainer's exact command --
+hit a real, separate install-path bug, not our repro. First failure was
+silent (`pip install -q` swallows subprocess build errors -- my own
+mistake giving that flag originally). Without `-q`, still nothing useful
+until `-v` forced streaming: revealed `VLLM_USE_PRECOMPILED=1` downloads a
+prebuilt wheel for upstream vLLM main and layers this (Python-only) PR's
+changes on top, auto-detecting a CUDA variant via `torch.version.cuda` --
+but pip's *isolated build environment* pulled in an unpinned, newer
+`torch==2.13.0` (cu13-associated) as its own build dependency, so the
+detector saw "CUDA 13.0" and requested a `cu130` wheel that doesn't exist
+for that commit (404), instead of matching the real system CUDA (12.8).
+Checked `vendor/vllm/setup.py`'s `detect_system_cuda_variant()` directly to
+confirm the mechanism and find the override (`VLLM_MAIN_CUDA_VERSION`)
+rather than guessing at a workaround. Forcing that to 12.8 correctly
+resolved the variant to `cu128` -- but the wheel fetch STILL 404s, for both
+`cu128` and the unversioned default, at a commit hash that doesn't even
+match the "upstream main latest commit" printed right next to it. This
+looks like their nightly wheel index doesn't have anything published for
+whatever `get_base_commit_in_main_branch()` resolves to right now -- a
+real, separate bug in the PR's own install instructions, not something on
+our end to keep working around.
+
+Asked the user: report this and wait for the maintainer's reply, or spend
+the compute on a full source build to bypass their wheel infra entirely.
+User chose to report and wait, consistent with earlier compute-budget
+awareness in this project (the original "89 compute unit balance" framing
+from notebook 05). Drafted a PR comment with the exact commands/output,
+gave it to the user to post (not something to post automatically -- GitHub
+comments are visible, external, shared state). Logged status as BLOCKED in
+`docs/vllm-bug-report-draft.md` pending their response; section 6 of
+notebook 06 hasn't run yet and can't until install actually succeeds.

@@ -8,14 +8,23 @@ anchored-regex `config_groups` target matching — single-scheme worked because
 `Linear`-class-name matching is substring-based, mixed-precision (name-based)
 targets weren't. Fix PR:
 [vllm-project/vllm#49900](https://github.com/vllm-project/vllm/pull/49900)
-(Python-only, no compile needed). **Verification in progress** — see
-`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` section 6
-for the 4-point check the maintainer requested (mixed-precision checkpoint
+(Python-only, no compile needed). **Verification BLOCKED, 2026-07-27** — not
+on our repro, on their install command. `VLLM_USE_PRECOMPILED=1` tries to
+download a prebuilt wheel for vLLM's upstream `main` and layer the PR's
+Python-only changes on top; the wheel fetch 404s for the auto-resolved commit
+(`b68d7ef2622d2d22e964dd842381021865e942b8`, itself different from the
+"upstream main branch latest commit" printed alongside it), in every wheel
+variant tried (`cu130` auto-detected — wrong, due to an unpinned newer torch
+in pip's isolated build env; then `cu128` after forcing
+`VLLM_MAIN_CUDA_VERSION=12.8`; then the unversioned default). Posted this
+finding as a comment on the PR, asking for a published commit hash or to try
+a full source build. **Waiting on their reply before continuing section 6.**
+Once install succeeds: `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`
+section 6 has the 4-point check they requested (mixed-precision checkpoint
 loads, single-scheme checkpoint still loads / no regression, a real
 generation runs, and the compressed checkpoint's in-serving memory footprint
-vs. the decompressed workaround). Report results back on the issue once
-section 6 is run — real numbers only, same rule as everywhere else in this
-project.
+vs. the decompressed workaround) — real numbers only when reporting back,
+same rule as everywhere else in this project.
 
 The rest of this file is the original filed issue text, kept for the record.
 
