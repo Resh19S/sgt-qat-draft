@@ -376,25 +376,27 @@ did successfully go through git — only the checkpoint binary itself goes via D
    charts generated from findings.md (regenerate via
    `results/visual_metrics/generate_charts.py` if numbers ever change — never
    hand-edit the SVGs).
-6. **New, user-initiated (2026-07-25): open-source contribution to vLLM.**
-   User explicitly asked to pursue this — note this is the first work in the
+6. **Open-source contribution to vLLM (user-initiated 2026-07-25) — FILED,
+   fix in review, verification in progress (2026-07-27).** First work in the
    "out of scope" category CLAUDE.md flagged as a later, explicitly-requested
    phase; CLAUDE.md itself hasn't been updated to reflect that this has now
    started, worth revisiting if this becomes an ongoing part of the project.
-   Drafted (not filed) `docs/vllm-bug-report-draft.md`: a `[Bug]:`-titled
-   report for vLLM's `SpeculativeConfig(method="draft_model")` failing to load
-   compressed-tensors packed checkpoints (the exact `weight_packed` ValueError
-   from `docs/findings.md` 2026-07-24). Wrote
-   `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` — a
-   minimal, cheap, publicly-runnable repro (tiny public model, plain W4A16
-   GPTQ, no mixed precision, no private checkpoint) that isolates the actual
-   bug rather than depending on our full SGT-QAT setup. **Not yet run.** The
-   issue draft has explicit `<PASTE ... HERE>` placeholders for
-   `collect_env.py` output, `pip show vllm`, and the full traceback — none of
-   that data exists yet; do not fill those placeholders with anything but
-   real pasted output from actually running notebook 06. Do not file the
-   issue until the "Before filing" checklist at the bottom of that file is
-   complete.
+   Full arc: minimal repro (`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`)
+   showed the bug is specifically about **mixed-precision `config_groups`**
+   compressed-tensors checkpoints (single-scheme loads fine) — see
+   `docs/logs.md` 2026-07-26 for the full narrowing process. Filed as
+   [vllm-project/vllm#49893](https://github.com/vllm-project/vllm/issues/49893)
+   with real `collect_env`/traceback data (`docs/vllm-bug-report-draft.md` has
+   the full filed text). Maintainer `harjothkhara` confirmed and opened a fix,
+   [PR #49900](https://github.com/vllm-project/vllm/pull/49900), within hours
+   — root cause matches our own finding almost exactly (draft-model weight
+   prefix breaks exact-name/anchored-regex `config_groups` target matching).
+   **Next step**: run notebook 06 section 6 (added 2026-07-27) against the fix
+   branch to confirm the 4 points the maintainer asked for — mixed-precision
+   checkpoint loads, single-scheme checkpoint still loads (no regression), a
+   real generation runs, and the compressed checkpoint's in-serving memory
+   footprint vs. the decompressed workaround. Not yet run. Report results back
+   on the issue once done.
 
 ## Workflow note (2026-07-23)
 

@@ -641,3 +641,30 @@ nothing omitted is relevant to the bug. `docs/vllm-bug-report-draft.md` is
 now fully filled in -- every placeholder replaced with real, pasted data.
 Only remaining checklist item is the user's own final read-through before
 filing on GitHub; nothing left for this session to do here.
+
+**2026-07-27** — user filed the issue: vllm-project/vllm#49893. Fast
+response -- maintainer harjothkhara confirmed within hours, labeled
+bug/quantization, and opened a fix PR (#49900) with a root-cause
+explanation that lines up almost exactly with what we found ourselves: the
+draft model loads under a `draft_model` weight prefix at runtime, which
+breaks `config_groups`' exact-name/anchored-regex target matching --
+single-scheme worked only because `Linear`-class-name matching happens to
+be substring-based. Validates the whole "narrow the repro before filing"
+detour from 2026-07-26 -- this is a precise, actionable bug report because
+of that, not despite the extra step.
+
+Maintainer asked for 4 confirmations against their fix branch (no GPU on
+their end). Added section 6 to notebook 06: installs the fix branch
+(`VLLM_USE_PRECOMPILED=1 pip install git+...`), then checks (a) mixed-
+precision checkpoint loads, (b) single-scheme checkpoint still loads --
+regression check, (c) an actual short generation runs (not just engine
+init), and (d) in-serving memory delta for the compressed checkpoint vs.
+the decompressed workaround (reuses the same ModelCompressor decompression
+approach from notebook 03) -- confirms compression actually survives
+loading now, not just that loading stopped crashing. Split into separate
+restart-the-runtime sections per the same persistent-CUDA-context caution
+as section 5b, since several of these instantiate a second `LLM()` in what
+would otherwise be the same process. Not yet run. Updated
+`docs/vllm-bug-report-draft.md`'s header to reflect FILED status and link
+both the issue and the fix PR, kept the original filed text below for the
+record rather than overwriting it.

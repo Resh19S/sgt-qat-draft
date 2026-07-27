@@ -1,4 +1,25 @@
-# vLLM bug report — draft (not yet filed)
+# vLLM bug report — FILED, fix in review
+
+**Filed as [vllm-project/vllm#49893](https://github.com/vllm-project/vllm/issues/49893),
+2026-07-27.** Confirmed by maintainer `harjothkhara` within hours (labeled
+`bug`/`quantization`), root cause matches our own finding: the draft model
+loads under a `draft_model` prefix at runtime, which breaks exact-name/
+anchored-regex `config_groups` target matching — single-scheme worked because
+`Linear`-class-name matching is substring-based, mixed-precision (name-based)
+targets weren't. Fix PR:
+[vllm-project/vllm#49900](https://github.com/vllm-project/vllm/pull/49900)
+(Python-only, no compile needed). **Verification in progress** — see
+`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` section 6
+for the 4-point check the maintainer requested (mixed-precision checkpoint
+loads, single-scheme checkpoint still loads / no regression, a real
+generation runs, and the compressed checkpoint's in-serving memory footprint
+vs. the decompressed workaround). Report results back on the issue once
+section 6 is run — real numbers only, same rule as everywhere else in this
+project.
+
+The rest of this file is the original filed issue text, kept for the record.
+
+---
 
 Status: draft, 2026-07-26 — scope **confirmed** via
 `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`. Section 3
