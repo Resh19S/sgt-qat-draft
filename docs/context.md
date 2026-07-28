@@ -405,8 +405,16 @@ did successfully go through git — only the checkpoint binary itself goes via D
    a layer-boundary-aligned split, failed identically). Posted as a follow-up
    PR comment with the exact shape data — see `docs/vllm-bug-report-draft.md`
    for the full text. **Points 2-4 (single-scheme regression, generation,
-   memory comparison) are blocked behind this new finding.** Waiting on the
-   maintainer's reply.
+   memory comparison) are blocked behind this new finding.**
+
+   **Waiting on the maintainer's reply (as of 2026-07-29, 2 days silent —
+   normal pace, not a stalemate; ~1 week of silence before a polite bump
+   comment is warranted).** Point 2 (single-scheme regression check, notebook
+   06 section 6d) is fully decoupled from the new bug and could be run any
+   time at near-zero cost — **deliberately held back per user instruction**,
+   to run only if/when they actually follow up on the issue, not before. Do
+   not run it proactively in a future session; wait for the user to say
+   they're following up.
 
 ## Workflow note (2026-07-23)
 

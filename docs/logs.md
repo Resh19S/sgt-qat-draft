@@ -755,3 +755,13 @@ troubleshooting note instead. The 782KB exported file itself
 (`06_..._repro1.ipynb`) is untracked and not committed -- redundant now that
 its useful content is folded into the canonical notebook; left in place for
 the user to delete or keep as they prefer, not removed unilaterally.
+
+**2026-07-29** — user pushed everything, asked whether 2 days of silence on
+the issue/PR counts as a stalemate. Answered no -- normal maintainer pace,
+not unusual for a volunteer who already engaged fast once; recommended
+waiting ~1 week before a polite bump rather than reading silence as stuck.
+User confirmed the plan: hold off on the decoupled point-2 (single-scheme
+regression) check until they're actually ready to follow up on the issue,
+not run it proactively now just because it's cheap and available. Noted this
+explicitly in context.md so a future session doesn't jump ahead and run it
+unprompted.
