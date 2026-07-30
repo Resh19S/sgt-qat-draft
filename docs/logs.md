@@ -817,3 +817,25 @@ explicitly in the reply rather than just reporting the isolation-check
 success and leaving the version question looking resolved when it isn't.
 Isolation check 2 (W4/W4 config_groups drafter, needs the fix-branch
 session) still pending.
+
+User asked (a) whether 1a-1c need re-running before 2/3, and (b) to add a
+fix attempt for the packing-format surprise, then re-upload the notebook to
+debug 2/3 live. Answered (a): no, only a cheap Drive-restore is needed (1a/1b
+are the expensive quantization steps, already done and safely on Drive) --
+added a "1-restore" cell for this instead of dropping section 1 outright,
+since section 1's actual builds still need to exist somewhere. For (b):
+added section 1d (retry building the W3 checkpoint with `llmcompressor`
+upgraded, not just `compressed-tensors` -- the next lever to try after the
+version-pin alone didn't work) and section 2b (re-test with that checkpoint).
+
+Hit and fixed a real bug in my own NotebookEdit usage while doing this: the
+plain `cell-N` labels the tool shows for cells without an explicit `id`
+field are POSITIONAL, not stable -- they shift every time an earlier cell
+is inserted. My inserts for 1d and 2b used cell-id targets computed from an
+earlier snapshot, landed at the wrong (shifted) positions, and ended up
+splitting section 1c's markdown from its own code cell. Caught this by
+diffing the intended structure against a fresh full read (which showed the
+actual current ids), rather than assuming my inserts landed where intended.
+Fixed by rewriting the whole file in one clean pass with explicit stable
+`id` fields on every cell -- avoids this class of bug recurring on any
+future edit to this notebook.
