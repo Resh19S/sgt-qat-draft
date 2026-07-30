@@ -800,3 +800,20 @@ as notebook 06.
 User also said: no more Co-Authored-By tag on commits in this project going
 forward -- saved as a feedback memory so future sessions don't need
 reminding.
+
+Notebook 07 sections 1-2 ran. Isolation check 1 confirmed the maintainer's
+diagnosis exactly -- identical AssertionError, identical location, on a
+completely plain model load with zero draft_model/speculative_config
+involved. Clean, strong confirmation this is unrelated to the PR.
+
+Real surprise: pinning compressed-tensors>=0.17.0 (resolved to 0.17.1) did
+NOT change the packed shape -- still (3072, 103), the old layout, not the
+dense 96-column one he said landed in 0.17.0. So the version-pin
+remediation he suggested doesn't actually work as expected; either
+llmcompressor 0.12.0 doesn't invoke the updated packer regardless of which
+compressed-tensors is installed alongside it, or there's some other
+setting/flag needed that neither of us knows about yet. Flagged this
+explicitly in the reply rather than just reporting the isolation-check
+success and leaving the version question looking resolved when it isn't.
+Isolation check 2 (W4/W4 config_groups drafter, needs the fix-branch
+session) still pending.

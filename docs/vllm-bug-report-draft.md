@@ -31,11 +31,31 @@ post-mortem (not a guess), and confirmed this isn't an artifact of our own
 test checkpoint's construction — rebuilt it with a layer-boundary-aligned
 split (so no merged weight straddles two bit-widths) and it failed
 identically. **Posted this as a follow-up comment on the PR** with the exact
-shape data. **Points 2-4 are blocked behind this new finding — waiting on the
-maintainer's reply before continuing section 6a onward.**
-`notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` section 6
-has the full diagnostic trail and the 4-point check they originally
-requested, updated to reflect where things actually stand.
+shape data. `notebooks/06_vllm_draft_model_compressed_tensors_bug_repro.ipynb`
+section 6 has the full diagnostic trail and the 4-point check they originally
+requested.
+
+**Maintainer's reply, 2026-07-29 — superseded our merged-weight hypothesis
+with the real diagnosis.** vLLM expects **dense** W3 packing (96 int32
+columns, sub-byte-boundary packed — landed in `compressed-tensors` 0.17.0);
+our checkpoint's W3 tensor has 103 columns (older whole-values-per-int32
+layout). Coincide exactly for 4-bit, which is why only W3 ever tripped
+anything. **Not a `draft_model`-path bug, not a merged-weight bug — a
+packing-format/version mismatch.** He asked for our exact library versions
+and suggested two isolation checks — see
+`notebooks/07_w3_packing_format_isolation_checks.ipynb`.
+
+**Isolation check 1 result, 2026-07-30: CONFIRMED exactly as predicted.**
+Identical `AssertionError` at the same location, loading the same W3
+checkpoint as a completely plain model — no `speculative_config`, no
+`draft_model` at all. Clean proof this is unrelated to the PR. **Surprise**:
+pinning `compressed-tensors>=0.17.0` (resolved to 0.17.1) did **not** fix
+the packed shape — still `(3072, 103)`, not the expected dense 96-column
+layout. Versions: `llmcompressor==0.12.0`, `compressed-tensors==0.17.1`,
+`torch==2.11.0+cu128`. Reported both back on the PR, asking whether
+`llmcompressor` needs its own version bump or a specific setting to invoke
+the updated packer. **Isolation check 2 (W4/W4 `config_groups` drafter,
+needs the fix-branch session) still pending.**
 
 The rest of this file is the original filed issue text, kept for the record.
 

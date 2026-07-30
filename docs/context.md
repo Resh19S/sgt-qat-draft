@@ -420,10 +420,22 @@ did successfully go through git — only the checkpoint binary itself goes via D
    checks (plain-model W3 load, no `draft_model` at all; W4/W4 `config_groups`
    drafter, unambiguous packing). Wrote
    `notebooks/07_w3_packing_format_isolation_checks.ipynb` to answer all
-   three — **not yet run**. Sections 1-2 (checkpoint builds + isolation check
-   1) need only stock `pip install vllm`, no fix-branch/source-build
-   complexity at all; section 3 (isolation check 2) needs the fix branch in a
-   separate session, same Drive-handoff pattern as notebook 06.
+   three.
+
+   **Sections 1-2 run, 2026-07-30. Isolation check 1: CONFIRMED exactly as
+   the maintainer predicted** — identical `AssertionError` at
+   `vllm/model_executor/parameter.py:175`, on a completely plain model load
+   with zero `draft_model`/`speculative_config` involved. Clean proof this is
+   unrelated to the PR. **Real surprise**: pinning `compressed-tensors>=0.17.0`
+   (resolved to 0.17.1) did **not** fix the packed shape — still `(3072, 103)`,
+   the old layout, not the dense 96-column one he said landed in 0.17.0.
+   Versions captured: `llmcompressor==0.12.0`, `compressed-tensors==0.17.1`,
+   `torch==2.11.0+cu128`. Reported both results back on the PR — the
+   isolation-check confirmation and the version-pin surprise, asking whether
+   `llmcompressor` itself needs a version bump or some other setting to
+   actually invoke the updated packer. **Section 3 (isolation check 2, W4/W4
+   `config_groups` drafter) still needs the fix-branch session — not yet
+   run.**
 
    Point 2 from the *original* 4-point ask (notebook 06 section 6d,
    single-scheme W4A16 regression check) is separate from this and remains
