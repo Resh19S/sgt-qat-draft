@@ -54,8 +54,20 @@ the packed shape — still `(3072, 103)`, not the expected dense 96-column
 layout. Versions: `llmcompressor==0.12.0`, `compressed-tensors==0.17.1`,
 `torch==2.11.0+cu128`. Reported both back on the PR, asking whether
 `llmcompressor` needs its own version bump or a specific setting to invoke
-the updated packer. **Isolation check 2 (W4/W4 `config_groups` drafter,
-needs the fix-branch session) still pending.**
+the updated packer.
+
+**Second negative result, 2026-07-30 — levers exhausted.** Tried upgrading
+`llmcompressor` itself, not just `compressed-tensors`: `pip install -U
+llmcompressor "compressed-tensors>=0.17.0"` resolved to `llmcompressor==0.12.0`
+(unchanged — apparently already the latest on PyPI) and `compressed-tensors==0.17.0`
+(dropped from 0.17.1 — `llmcompressor` pins it tighter than `>=0.17.0`
+allows). Packed shape still `(3072, 103)`, unchanged. The latest installable
+combination of both libraries still produces the old layout — reported this
+back on the PR, asking directly whether a specific `llmcompressor`
+version/branch or a recipe/config setting is needed to invoke the new
+packer. **Isolation check 2 (W4/W4 `config_groups` drafter, needs the
+fix-branch session) still pending — independent of this packing-format
+question.**
 
 The rest of this file is the original filed issue text, kept for the record.
 

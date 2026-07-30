@@ -839,3 +839,17 @@ actual current ids), rather than assuming my inserts landed where intended.
 Fixed by rewriting the whole file in one clean pass with explicit stable
 `id` fields on every cell -- avoids this class of bug recurring on any
 future edit to this notebook.
+
+Section 1d ran: `pip install -U llmcompressor "compressed-tensors>=0.17.0"`
+resolved to `llmcompressor==0.12.0` (unchanged -- apparently already the
+latest on PyPI, `-U` had nothing to do) and `compressed-tensors==0.17.0`
+(actually DROPPED from the earlier 0.17.1 -- llmcompressor evidently pins
+it tighter than our `>=0.17.0`). Packed shape: still `(3072, 103)`, same as
+before. Second confirmed negative result -- we've now tried both obvious
+levers (pin compressed-tensors>=0.17.0 alone; upgrade llmcompressor too)
+and neither changes the packing. Skipped 2b (redundant -- the direct
+safetensors shape check already answers the question, no need to spend a
+vLLM load confirming what's already known). Drafted a reply asking the
+maintainer directly whether a specific llmcompressor version/branch or a
+recipe/config setting is needed, since we're out of things to try blindly.
+Updated the notebook's intro and report-back sections to reflect this.

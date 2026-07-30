@@ -433,9 +433,19 @@ did successfully go through git — only the checkpoint binary itself goes via D
    `torch==2.11.0+cu128`. Reported both results back on the PR — the
    isolation-check confirmation and the version-pin surprise, asking whether
    `llmcompressor` itself needs a version bump or some other setting to
-   actually invoke the updated packer. **Section 3 (isolation check 2, W4/W4
-   `config_groups` drafter) still needs the fix-branch session — not yet
-   run.**
+   actually invoke the updated packer.
+
+   **Section 1d run, 2026-07-30 — second negative result, levers exhausted.**
+   Upgrading `llmcompressor` itself (`pip install -U llmcompressor
+   "compressed-tensors>=0.17.0"`) resolved to `llmcompressor==0.12.0`
+   (unchanged, apparently already latest on PyPI) and `compressed-tensors==0.17.0`
+   (dropped from 0.17.1 — llmcompressor pins it tighter than `>=0.17.0`).
+   Packed shape still `(3072, 103)`. Both obvious levers tried (version pin
+   alone; llmcompressor upgrade too) — neither works. Reported this back on
+   the PR, asking directly whether a specific version/branch or recipe
+   setting is needed. **Section 3 (isolation check 2, W4/W4 `config_groups`
+   drafter) still needs the fix-branch session — not yet run, independent of
+   the packing-format question.**
 
    Point 2 from the *original* 4-point ask (notebook 06 section 6d,
    single-scheme W4A16 regression check) is separate from this and remains
