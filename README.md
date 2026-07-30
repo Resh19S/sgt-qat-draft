@@ -39,8 +39,11 @@ mirroring the prior project's notebook-driven workflow:
   a further bit-width tier (W3/W2 mix, vs. the flagship W4/W3) narrows the memory
   gap against EAGLE-3, and what it costs in quality (WikiText-2 PPL proxy).
 - `06_vllm_draft_model_compressed_tensors_bug_repro.ipynb` — minimal, public,
-  self-contained repro of the vLLM `draft_model`-loading bug found in `04`/`findings.md`,
-  for the upstream bug report draft at `docs/vllm-bug-report-draft.md` (not yet filed).
+  self-contained repro of the vLLM `draft_model`-loading bug filed as
+  [vllm-project/vllm#49893](https://github.com/vllm-project/vllm/issues/49893)
+  (fix in [PR #49900](https://github.com/vllm-project/vllm/pull/49900)).
+- `07_w3_packing_format_isolation_checks.ipynb` — follow-up isolation checks
+  for the maintainer's W3-packing-format diagnosis on #49893 (not yet run).
 
 ### 3. Results & docs
 

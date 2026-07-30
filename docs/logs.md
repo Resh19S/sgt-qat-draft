@@ -765,3 +765,38 @@ regression) check until they're actually ready to follow up on the issue,
 not run it proactively now just because it's cheap and available. Noted this
 explicitly in context.md so a future session doesn't jump ahead and run it
 unprompted.
+
+Maintainer actually replied well before the week mark -- precise, better
+diagnosis than either of our own hypotheses. He traced the real cause: vLLM
+now expects DENSE W3 packing (96 int32 columns, sub-byte-boundary packed --
+landed in compressed-tensors 0.17.0), our checkpoint's W3 tensor has 103
+columns (older whole-values-per-int32 layout). The two layouts coincide
+exactly for 4-bit, which is why only W3 ever tripped anything. This isn't a
+draft_model-path bug or a merged-weight bug at all -- both of our earlier
+hypotheses were wrong, though the diagnostic legwork (exact shapes via
+%debug, ruling out the layer-boundary confound) is clearly what let him
+nail it this precisely instead of guessing himself.
+
+Before jumping to code, discussed the "should we trace load_merged_column_
+weight ourselves" question the user raised just before this reply landed --
+moot now given his answer, glad we asked/planned first rather than spending
+compute on a source-level trace that would've been superseded within
+minutes.
+
+He asked one question (exact library versions that produced our checkpoint
+-- something we never captured, a real gap) and suggested two cheap
+isolation checks (plain-model W3 load with no draft_model at all; W4/W4
+config_groups drafter, unambiguous packing). Wrote `notebooks/07_w3_packing
+_format_isolation_checks.ipynb` to answer all three: builds a uniform W3
+checkpoint with compressed-tensors>=0.17.0 explicitly pinned this time
+(captures pip show output immediately, unlike notebook 06's gap), prints
+the packed tensor's actual shape directly via safetensors (no vLLM needed
+to answer the version question), then isolation check 1 in the same cheap
+session (stock pip install vllm, no draft_model, no fix-branch conflict --
+simpler than anything in notebook 06's later sections), then isolation
+check 2 in a separate fix-branch session via the same Drive-handoff pattern
+as notebook 06.
+
+User also said: no more Co-Authored-By tag on commits in this project going
+forward -- saved as a feedback memory so future sessions don't need
+reminding.
