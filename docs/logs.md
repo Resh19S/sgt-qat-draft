@@ -853,3 +853,25 @@ vLLM load confirming what's already known). Drafted a reply asking the
 maintainer directly whether a specific llmcompressor version/branch or a
 recipe/config setting is needed, since we're out of things to try blindly.
 Updated the notebook's intro and report-back sections to reflect this.
+
+**2026-08-10** — user asked whether to send a follow-up bump (been ~2 weeks
+since our last comment). Checked actual issue/PR status via the public
+GitHub API (no gh CLI here, but curl + api.github.com works fine for public
+repos). Findings: issue #49893 still open; PR #49900 still open/unmerged but
+updated Aug 4 -- harjothkhara added a mixed-config_groups per-layer-scheme
+test (Jul 30) then asked (Aug 4) for a maintainer to add the `ready` label,
+because vLLM's pre-run-check gates CI behind 4+ merged PRs and they have 1.
+So the fix is done (code + test) but merge-blocked on vLLM core maintainers,
+not on us or harjothkhara. User first drafted a nicely-reframed "just
+logging findings, no action expected" comment -- good posture -- but I
+flagged the content was a duplicate of our already-posted 2026-07-30
+comment (same versions, same 103-column result, same question), so posting
+it would just be re-logging stale info. Agreed to DROP posting anything and
+just wait, re-checking harjothkhara/PR activity after ~another week of
+staleness (~2026-08-17+). If a comment ever becomes warranted, it should
+carry genuinely new data (isolation check 2, the W4/W4 drafter end-to-end
+confirmation) rather than repeat what's already in the thread. Also
+confirmed via the API that the user's author_association is NONE -- they're
+the issue reporter, not an official vLLM contributor (which requires a
+merged commit; the fix PR is harjothkhara's, not theirs). Updated
+context.md with the hold decision + recheck plan.

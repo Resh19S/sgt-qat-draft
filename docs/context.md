@@ -447,6 +447,28 @@ did successfully go through git — only the checkpoint binary itself goes via D
    drafter) still needs the fix-branch session — not yet run, independent of
    the packing-format question.**
 
+   **Status check via GitHub API, 2026-08-10 — decision: HOLD, don't post.**
+   Issue #49893 still open (not closed/merged/transferred/locked). PR #49900
+   still open, not merged, not draft — but updated 2026-08-04 (after our last
+   comment): harjothkhara added a "mixed config_groups per-layer scheme
+   selection test under draft root" commit (Jul 30) and then commented
+   (Aug 4) asking a maintainer to add the `ready` label because CI hasn't run
+   at all — vLLM's `pre-run-check` gates CI behind 4+ merged PRs and they
+   have 1. **So the fix is essentially done (code + test) but merge-blocked on
+   vLLM core maintainers, not on us or on harjothkhara's bandwidth.**
+   Considered posting a follow-up but decided against it: our existing
+   2026-07-30 comment already logs the exact version findings + the open W3
+   question, so re-posting would just duplicate stale info, and harjothkhara
+   is blocked themselves (no GPU, and now no CI access) — nudging them for
+   engineering bandwidth would be tone-deaf. **Plan: wait. Re-check
+   harjothkhara/PR activity after ~another week of staleness (i.e. around
+   2026-08-17+).** If genuinely new data is ever needed to justify a comment,
+   run isolation check 2 (W4/W4 drafter) for a real reporter-side "fix works
+   end-to-end on the 4-bit case" endorsement — but not before there's a
+   reason to. Also confirmed incidentally: user's `author_association` on the
+   issue is `NONE` — they are the issue *reporter*, not an official vLLM
+   contributor (that needs a merged commit; the fix PR is harjothkhara's).
+
    Point 2 from the *original* 4-point ask (notebook 06 section 6d,
    single-scheme W4A16 regression check) is separate from this and remains
    deliberately held back per user instruction — run only if/when they

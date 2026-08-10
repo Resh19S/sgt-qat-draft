@@ -69,6 +69,19 @@ packer. **Isolation check 2 (W4/W4 `config_groups` drafter, needs the
 fix-branch session) still pending — independent of this packing-format
 question.**
 
+**Status as of 2026-08-10 — holding, no further comment posted.** Checked
+via the GitHub API: issue open; fix PR #49900 open/unmerged, with a
+mixed-config_groups test added (Jul 30) but **merge-blocked on vLLM CI** —
+harjothkhara asked (Aug 4) for a maintainer to add the `ready` label since
+`pre-run-check` gates CI behind 4+ merged PRs and they have 1. So the fix is
+done but stuck on vLLM core maintainers, not on us or harjothkhara. Decided
+against another comment: our 2026-07-30 comment already logs the version
+findings + open W3 question, so re-posting would just duplicate stale info,
+and harjothkhara is blocked themselves. Plan: wait, re-check activity after
+~another week (~2026-08-17+); if a comment ever becomes warranted it should
+carry new data (isolation check 2), not repeat the thread. See
+`docs/context.md` for the full state.
+
 The rest of this file is the original filed issue text, kept for the record.
 
 ---
