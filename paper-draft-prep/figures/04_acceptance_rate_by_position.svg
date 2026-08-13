@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="480" viewBox="0 0 760 480" font-family="Helvetica, Arial, sans-serif">
+<rect width="760" height="480" fill="#ffffff"/>
+<title>Per-Position Acceptance Rate</title>
+<text x="380.0" y="34" font-size="20" font-weight="bold" text-anchor="middle" fill="#202124">Per-Position Acceptance Rate</text>
+<text x="380.0" y="56" font-size="13" font-weight="normal" text-anchor="middle" fill="#5f6368">EAGLE-3 vs. SGT-QAT drafter, 3 speculative token positions</text>
+<line x1="90" y1="390.0" x2="720" y2="390.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="394.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">0%</text>
+<line x1="90" y1="334.0" x2="720" y2="334.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="338.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">20%</text>
+<line x1="90" y1="278.0" x2="720" y2="278.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="282.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">40%</text>
+<line x1="90" y1="222.0" x2="720" y2="222.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="226.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">60%</text>
+<line x1="90" y1="166.0" x2="720" y2="166.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="170.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">80%</text>
+<line x1="90" y1="110.0" x2="720" y2="110.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="114.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">100%</text>
+<text x="90.0" y="416" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">position 1</text>
+<text x="405.0" y="416" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">position 2</text>
+<text x="720.0" y="416" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">position 3</text>
+<polyline points="90.0,190.0 405.0,259.9 720.0,307.2" fill="none" stroke="#4285f4" stroke-width="3"/>
+<circle cx="90.0" cy="190.0" r="5" fill="#4285f4"/>
+<text x="90.0" y="176.01932600555622" font-size="11" font-weight="bold" text-anchor="middle" fill="#4285f4">71%</text>
+<circle cx="405.0" cy="259.9" r="5" fill="#4285f4"/>
+<text x="405.0" y="245.89249909409352" font-size="11" font-weight="bold" text-anchor="middle" fill="#4285f4">46%</text>
+<circle cx="720.0" cy="307.2" r="5" fill="#4285f4"/>
+<text x="720.0" y="293.24121270684867" font-size="11" font-weight="bold" text-anchor="middle" fill="#4285f4">30%</text>
+<polyline points="90.0,202.9 405.0,262.2 720.0,300.7" fill="none" stroke="#ea4335" stroke-width="3"/>
+<circle cx="90.0" cy="202.9" r="5" fill="#ea4335"/>
+<text x="90.0" y="222.92153589315527" font-size="11" font-weight="bold" text-anchor="middle" fill="#ea4335">67%</text>
+<circle cx="405.0" cy="262.2" r="5" fill="#ea4335"/>
+<text x="405.0" y="282.18697829716194" font-size="11" font-weight="bold" text-anchor="middle" fill="#ea4335">46%</text>
+<circle cx="720.0" cy="300.7" r="5" fill="#ea4335"/>
+<text x="720.0" y="320.7178631051753" font-size="11" font-weight="bold" text-anchor="middle" fill="#ea4335">32%</text>
+<line x1="90" y1="390" x2="720" y2="390" stroke="#202124" stroke-width="1.5"/>
+<rect x="90" y="428" width="14" height="14" fill="#4285f4" rx="2"/>
+<text x="110" y="440" font-size="12" font-weight="normal" text-anchor="start" fill="#202124">EAGLE-3</text>
+<rect x="310" y="428" width="14" height="14" fill="#ea4335" rx="2"/>
+<text x="330" y="440" font-size="12" font-weight="normal" text-anchor="start" fill="#202124">SGT-QAT drafter</text>
+<text x="380.0" y="468" font-size="10" font-weight="normal" text-anchor="middle" fill="#80868b">Source: results/baseline_eagle3_2026-07-25T08-26-34...json, results/sgt_qat_drafter_2026-07-25T09-08-02...json</text>
+</svg>

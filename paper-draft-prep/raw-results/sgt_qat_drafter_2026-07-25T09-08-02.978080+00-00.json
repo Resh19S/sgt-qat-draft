@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-07-25T09:08:02.978080+00:00",
+  "run_name": "sgt_qat_drafter",
+  "target_model": "Qwen/Qwen3-8B",
+  "speculative_config": {
+    "method": "draft_model",
+    "model": "/content/sgt-qat-draft/checkpoints/qwen3-1.7b-sgt-qat-plain",
+    "num_speculative_tokens": 3
+  },
+  "num_prompts": 80,
+  "max_tokens": 256,
+  "wall_clock_seconds": 622.0212062220003,
+  "tokens_per_second": 32.924922486791644,
+  "gpu_memory_used_bytes": 40007368704,
+  "num_drafts": 8386,
+  "num_draft_tokens": 25158,
+  "num_accepted_tokens": 12105,
+  "mean_acceptance_length": 2.4434772239446696,
+  "acceptance_rate_by_position": [0.6681373718101598, 0.45647507751013594, 0.31886477462437396],
+  "notes": ""
+}

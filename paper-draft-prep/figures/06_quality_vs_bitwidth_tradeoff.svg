@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="520" viewBox="0 0 780 520" font-family="Helvetica, Arial, sans-serif">
+<rect width="780" height="520" fill="#ffffff"/>
+<title>Quantization Aggressiveness vs. Quality (WikiText-2 PPL)</title>
+<text x="390.0" y="34" font-size="20" font-weight="bold" text-anchor="middle" fill="#202124">Quantization Aggressiveness vs. Quality (WikiText-2 PPL)</text>
+<text x="390.0" y="56" font-size="13" font-weight="normal" text-anchor="middle" fill="#5f6368">Flagship (3.156 bits/weight) vs. aggressive (2.158 bits/weight) -- lower PPL is better</text>
+<line x1="90" y1="400.0" x2="740" y2="400.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="404.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">0</text>
+<line x1="90" y1="342.0" x2="740" y2="342.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="346.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">100</text>
+<line x1="90" y1="284.0" x2="740" y2="284.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="288.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">200</text>
+<line x1="90" y1="226.0" x2="740" y2="226.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="230.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">300</text>
+<line x1="90" y1="168.0" x2="740" y2="168.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="172.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">400</text>
+<line x1="90" y1="110.0" x2="740" y2="110.0" stroke="#dadce0" stroke-width="1"/>
+<text x="78" y="114.0" font-size="11" font-weight="normal" text-anchor="end" fill="#5f6368">500</text>
+<rect x="138.8" y="387.0" width="96.7" height="13.0" fill="#c6dafc" rx="3"/>
+<text x="186.52499999999998" y="379.0254" font-size="12" font-weight="bold" text-anchor="middle" fill="#202124">22.37</text>
+<rect x="252.5" y="390.8" width="96.7" height="9.2" fill="#4285f4" rx="3"/>
+<text x="300.275" y="382.7722" font-size="12" font-weight="bold" text-anchor="middle" fill="#202124">15.91</text>
+<text x="252.5" y="424" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">Flagship</text>
+<text x="252.5" y="442" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">(W4/W3, 3.156 bpw)</text>
+<rect x="463.8" y="136.5" width="96.7" height="263.5" fill="#fdd7d3" rx="3"/>
+<text x="511.525" y="128.5002" font-size="12" font-weight="bold" text-anchor="middle" fill="#202124">454.31</text>
+<rect x="577.5" y="290.6" width="96.7" height="109.4" fill="#ea4335" rx="3"/>
+<text x="625.275" y="282.5772" font-size="12" font-weight="bold" text-anchor="middle" fill="#202124">188.66</text>
+<text x="577.5" y="424" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">Aggressive</text>
+<text x="577.5" y="442" font-size="13" font-weight="normal" text-anchor="middle" fill="#202124">(W3/W2, 2.158 bpw)</text>
+<line x1="90" y1="400" x2="740" y2="400" stroke="#202124" stroke-width="1.5"/>
+<rect x="90" y="458" width="14" height="14" fill="#c6dafc" rx="2"/>
+<text x="110" y="470" font-size="12" font-weight="normal" text-anchor="start" fill="#202124">Stage 1 (GPTQ only)</text>
+<rect x="280" y="458" width="14" height="14" fill="#4285f4" rx="2"/>
+<text x="300" y="470" font-size="12" font-weight="normal" text-anchor="start" fill="#202124">Stage 1+2 (+QAT)</text>
+<text x="390.0" y="506" font-size="10" font-weight="normal" text-anchor="middle" fill="#80868b">Source: docs/findings.md 2026-07-25 "Aggressive quantization tradeoff" -- results/aggressive_quant_tradeoff_seed42_*.json</text>
+</svg>

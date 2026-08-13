@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-07-22T20:49:26.477032+00:00",
+  "experiment": "export_sgt_qat_checkpoint",
+  "model": "Qwen/Qwen3-1.7B",
+  "calib_seed": 42,
+  "protect_frac_target": 0.15,
+  "protect_frac_actual": 0.1562,
+  "n_layers_protected_w4": 53,
+  "n_layers_w3": 143,
+  "ppl_mixed_stage1_only": 22.3670525199208,
+  "ppl_combined_stage1_plus_2": 15.90919432508748,
+  "prior_project_reference": {
+    "fp16_ppl": 16.67,
+    "ptq_w3_seed42": 28.5,
+    "full_qat_baseline_ppl_seed42": 17.53
+  },
+  "n_trainable_params_stage2": 1189085184,
+  "qat_steps": 500,
+  "qat_lr": 1e-05,
+  "qat_precision": "fp32",
+  "checkpoint_dir": "/content/sgt-qat-draft/checkpoints/qwen3-1.7b-sgt-qat",
+  "checkpoint_size_mb": 1184.8,
+  "save_compressed": true,
+  "gpu": "NVIDIA A100-SXM4-40GB"
+}

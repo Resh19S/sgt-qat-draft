@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-25T07:50:21.542965+00:00",
+  "experiment": "compressed_checkpoint_standalone_memory",
+  "model": "checkpoints/qwen3-1.7b-sgt-qat (compressed)",
+  "compressed_checkpoint_delta_bytes": 1749024768,
+  "compressed_checkpoint_delta_gib": 1.629,
+  "plain_checkpoint_delta_bytes": null,
+  "plain_checkpoint_delta_gib": null,
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "notes": "Standalone weight-only load via transformers, NOT inside vLLM serving -- not directly comparable to notebook 02/03 GPU memory numbers (those include vLLM serving overhead / KV cache for a full request). See docs/findings.md for the caveat this is meant to partially address."
+}

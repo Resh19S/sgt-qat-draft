@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-07-25T08:26:34.711075+00:00",
+  "run_name": "baseline_eagle3",
+  "target_model": "Qwen/Qwen3-8B",
+  "speculative_config": {
+    "method": "eagle3",
+    "model": "Tengyunw/qwen3_8b_eagle3",
+    "num_speculative_tokens": 3
+  },
+  "num_prompts": 80,
+  "max_tokens": 256,
+  "wall_clock_seconds": 123.81134055200005,
+  "tokens_per_second": 165.41295739705296,
+  "gpu_memory_used_bytes": 40584085504,
+  "num_drafts": 8279,
+  "num_draft_tokens": 24837,
+  "num_accepted_tokens": 12207,
+  "mean_acceptance_length": 2.474453436405363,
+  "acceptance_rate_by_position": [0.7142166928372992, 0.46466964609252326, 0.2955670974755405],
+  "notes": ""
+}
