@@ -469,6 +469,16 @@ did successfully go through git — only the checkpoint binary itself goes via D
    issue is `NONE` — they are the issue *reporter*, not an official vLLM
    contributor (that needs a merged commit; the fix PR is harjothkhara's).
 
+   **2026-08-14 — third contributor appeared, then deferred; no action
+   needed.** `medhavee-upadhyaya` independently traced the root cause on
+   `main` (`DraftModelProposer._create_draft_vllm_config()` forces
+   `quant_config=None`; vLLM already exposes `get_draft_quant_config(...)` to
+   resolve the draft's own quant metadata — a crisper diagnosis than stated
+   before, useful breadcrumb), offered to fix it, then found PR #49900 covers
+   it and bowed out to avoid duplicate work. Net status unchanged (still
+   waiting on #49900, still CI-gated), just positive momentum. Hold posture
+   stands.
+
    Point 2 from the *original* 4-point ask (notebook 06 section 6d,
    single-scheme W4A16 regression check) is separate from this and remains
    deliberately held back per user instruction — run only if/when they

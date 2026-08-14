@@ -875,3 +875,17 @@ confirmed via the API that the user's author_association is NONE -- they're
 the issue reporter, not an official vLLM contributor (which requires a
 merged commit; the fix PR is harjothkhara's, not theirs). Updated
 context.md with the hold decision + recheck plan.
+
+**2026-08-14** — a third person, `medhavee-upadhyaya`, commented on the
+issue: independently traced the root cause on current `main`
+(`DraftModelProposer._create_draft_vllm_config()` forces `quant_config=None`
+while vLLM already exposes `get_draft_quant_config(vllm_config)` to resolve
+the draft checkpoint's own quant metadata -- a crisper mechanism-level
+diagnosis than we or harjothkhara had stated), offered to fix it, then an
+hour later found PR #49900 already addresses it and gracefully bowed out
+("will not open a competing PR... defer to the existing contributor's
+work"). No action needed on our end -- nobody asked us anything, and they
+self-resolved. Net status unchanged: still waiting on #49900, still
+CI-gated. Positive signal though: the issue is drawing capable contributors
+who independently confirm the same failure, which reflects well on the
+report. Our hold-and-wait posture stands.
