@@ -889,3 +889,14 @@ self-resolved. Net status unchanged: still waiting on #49900, still
 CI-gated. Positive signal though: the issue is drawing capable contributors
 who independently confirm the same failure, which reflects well on the
 report. Our hold-and-wait posture stands.
+
+**2026-08-21** — user flagged what looked like new activity on the issue
+(harjothkhara's 2 commits showing inline in the issue timeline). Checked via
+API before reacting: these are the SAME commits already known (Jul 26/30),
+just newly displayed inline (GitHub indexing delay), not new work. Real
+change: PR #49900 gained labels (bug/speculative-decoding/v1/quantization)
+-- triage, not progress. Checked actual CI state directly
+(commits/{sha}/check-runs): `pre-run-check` still shows `failure` -- the
+exact gate harjothkhara flagged Aug 4 is still blocking the real test suite.
+No `ready` label, no merge progress. Confirmed via hard data rather than
+assuming activity = progress. Hold posture unchanged.
